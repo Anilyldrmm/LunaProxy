@@ -177,7 +177,7 @@ func (a *app) stop() {
 	// bağlantılarını sürdürür, yeni PAC çekince DIRECT'e geçer.
 	go func() {
 		pushRouterPAC(localIP, "direct", 0)
-		time.Sleep(2 * time.Second)
+		time.Sleep(5 * time.Second)
 		if proxySrv != nil {
 			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 			defer cancel()
