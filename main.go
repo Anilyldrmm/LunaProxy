@@ -23,12 +23,13 @@ func openRunKey(write bool) (registry.Key, error) {
 const appName = "SpAC3DPI"
 
 type app struct {
-	mu       sync.Mutex
-	running  bool
-	localIP  string
-	proxySrv *http.Server
-	pacSrv   *http.Server
-	pacPort  int // aktif PAC port'u takip — port değişirse sunucu yeniden başlar
+	mu        sync.Mutex
+	running   bool
+	localIP   string
+	proxySrv  *http.Server
+	pacSrv    *http.Server
+	pacPort   int    // aktif PAC port'u takip — port değişirse sunucu yeniden başlar
+	dpiSource string // aktif DPI kaynağı: "service"|"process"|"manual"|"bundle"|"disabled"|"none"|""
 }
 
 var g *app
@@ -107,14 +108,26 @@ func (a *app) start() error {
 		go SetSystemProxy(fmt.Sprintf("%s:%d", a.localIP, c.ProxyPort))
 	}
 
-	if c.ManageGDPI && c.GDPIPath != "" {
-		go func() {
-			StopWindowsService()
-			if err := gdpi.Start(c.GDPIPath, activeGDPIFlags()); err != nil {
+	go func() {
+		result, err := ResolveDPI(c)
+		if err != nil {
+			logWarn("DPI kaynağı belirlenemedi: " + err.Error())
+			a.mu.Lock()
+			a.dpiSource = "none"
+			a.mu.Unlock()
+			return
+		}
+		a.mu.Lock()
+		a.dpiSource = result.Source
+		a.mu.Unlock()
+		if result.ExePath != "" {
+			if err := gdpi.Start(result.ExePath, activeGDPIFlags()); err != nil {
 				logError("GoodbyeDPI başlatılamadı: " + err.Error())
 			}
-		}()
-	}
+		} else {
+			logInfo("GoodbyeDPI kaynağı: " + result.Source + " (harici, dokunulmuyor)")
+		}
+	}()
 
 	a.proxySrv = ps
 	a.running = true
@@ -123,8 +136,8 @@ func (a *app) start() error {
 	watchdog.Stop()
 	watchdog.Start()
 
-	logInfo(fmt.Sprintf("SpAC3DPI başlatıldı | IP:%s Proxy:%d PAC:%d DPI:%s ISP:%s DNS:%s",
-		a.localIP, c.ProxyPort, c.PACPort, c.DPIMode, c.ISP, c.DNSMode))
+	logInfo(fmt.Sprintf("SpAC3DPI başlatıldı | IP:%s Proxy:%d PAC:%d DPIMode:%s ISP:%s DNS:%s DPISrc:%s",
+		a.localIP, c.ProxyPort, c.PACPort, c.DPIMode, c.ISP, c.DNSMode, c.DPISource))
 	return nil
 }
 
@@ -151,9 +164,10 @@ func (a *app) stop() {
 	if c.SetSystemProxy {
 		RestoreSystemProxy()
 	}
-	if c.ManageGDPI {
+	if gdpi.IsRunning() {
 		gdpi.Stop()
 	}
+	a.dpiSource = ""
 
 	a.mu.Unlock()
 
