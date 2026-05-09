@@ -48,40 +48,46 @@ var ispValues = []string{"auto", "superonline", "ttnet", "vodafone", "turkcell"}
 var dnsValues = []string{"unchanged", "cloudflare", "google", "adguard", "quad9", "opendns"}
 var chunkValues = []int{4, 8, 16, 40}
 
-// ── Renk sabitleri ───────────────────────────────────────────────────────────
+// ── Renk paleti (koyu lacivert, okunabilir beyaz metin) ─────────────────────
 
 var (
-	clrBg      = walk.RGB(15, 15, 26)    // #0f0f1a — pencere arka planı
-	clrSidebar = walk.RGB(10, 10, 20)    // #0a0a14 — sidebar + titlebar
-	clrCard    = walk.RGB(22, 22, 42)    // #16162a — card composite arka planı
-	clrNavAct  = walk.RGB(28, 12, 55)    // aktif nav item
-	clrBtnOn   = walk.RGB(220, 75, 75)   // DURDUR (kırmızı)
-	clrBtnOff  = walk.RGB(124, 58, 237)  // BAŞLAT (mor)
-	clrText    = walk.RGB(224, 208, 255) // #e0d0ff — birincil metin
-	clrSub     = walk.RGB(106, 90, 138)  // #6a5a8a — ikincil metin
-	clrGreen   = walk.RGB(72, 199, 116)  // #48c774
-	clrRed     = walk.RGB(220, 75, 75)   // #dc4b4b
+	clrBg      = walk.RGB(13, 17, 28)    // #0d111c — ana arka plan
+	clrSidebar = walk.RGB(9, 12, 20)     // #090c14 — sidebar
+	clrCard    = walk.RGB(20, 26, 42)    // #141a2a — kart arka planı
+	clrNavAct  = walk.RGB(24, 33, 55)    // #182137 — aktif nav
+	clrBtnOff  = walk.RGB(16, 185, 129)  // #10b981 — BAŞLAT (yeşil)
+	clrBtnOn   = walk.RGB(220, 60, 60)   // #dc3c3c — DURDUR (kırmızı)
+	clrText    = walk.RGB(235, 240, 252)  // #ebf0fc — birincil metin
+	clrSub     = walk.RGB(90, 110, 155)   // #5a6e9b — ikincil metin
+	clrGreen   = walk.RGB(16, 185, 129)  // #10b981
+	clrRed     = walk.RGB(220, 60, 60)   // #dc3c3c
 )
 
-// ── Win32 sabitleri (frameless pencere için) ──────────────────────────────────
+// ── Win32 sabitleri ───────────────────────────────────────────────────────────
 
 const (
-	gwlStyle       = -16
-	gwlExStyle     = -20
-	wsCaption      = uint32(0x00C00000)
-	wsSysMenu      = uint32(0x00080000)
-	wsThickFrame   = uint32(0x00040000)
-	wsMinBox       = uint32(0x00020000)
-	wsMaxBox       = uint32(0x00010000)
-	wsBorder       = uint32(0x00800000)
-	wsPopup        = uint32(0x80000000)
-	wsExAppWindow  = uint32(0x00040000)
-	swpNoMove      = uint32(0x0002)
-	swpNoSize      = uint32(0x0001)
+	gwlStyle    = -16
+	gwlExStyle  = -20
+	wsCaption   = uint32(0x00C00000)
+	wsSysMenu   = uint32(0x00080000)
+	wsThickFrame = uint32(0x00040000)
+	wsMinBox    = uint32(0x00020000)
+	wsMaxBox    = uint32(0x00010000)
+	wsBorder    = uint32(0x00800000)
+	wsPopup     = uint32(0x80000000)
+	wsExAppWindow = uint32(0x00040000)
+
 	swpNoZOrder    = uint32(0x0004)
 	swpFrameChg    = uint32(0x0020)
-	wmNcLBtnDown   = uint32(0x00A1)
-	htCaption      = uintptr(2)
+	swpNoCopyBits  = uint32(0x0100)
+
+	wmNcLBtnDown = uint32(0x00A1)
+	htCaption    = uintptr(2)
+
+	// DWM attributes (Windows 11+)
+	dwmwaBorderColor  = uint32(34)
+	dwmwaCaptionColor = uint32(35)
+	dwmwaColorNone    = uint32(0xFFFFFFFE)
 )
 
 var (
@@ -134,7 +140,12 @@ type appUI struct {
 	panelMobile   *walk.Composite
 	panelLogs     *walk.Composite
 
-	// Status panel — hero
+	// ScrollView refs (arka plan için)
+	svStatus   *walk.ScrollView
+	svSettings *walk.ScrollView
+	svMobile   *walk.ScrollView
+
+	// Status panel
 	ivLogo       *walk.ImageView
 	lblStatus    *walk.Label
 	lblIPInfo    *walk.Label
@@ -145,7 +156,6 @@ type appUI struct {
 	lblBytes     *walk.Label
 	lblStatusBar *walk.Label
 
-	// Status panel — detay
 	lblTotal     *walk.Label
 	lblErrors    *walk.Label
 	lblRestarts  *walk.Label
@@ -191,7 +201,6 @@ type appUI struct {
 	logModel      *logTableModel
 	chkAutoScroll *walk.CheckBox
 	lblLogCount   *walk.Label
-	logContent    *walk.Composite
 }
 
 var theUI = &appUI{}
@@ -223,15 +232,11 @@ func runUI() {
 		panic(err)
 	}
 
-	// Frameless pencere
 	u.makeFrameless()
-	u.darkTitleBar()
 	u.applyTheme()
-
-	// Titlebar sürükleme + min/close handler'ları
 	u.wireTitleBar()
 
-	// Sidebar nav handler'ları
+	// Nav handler'lar
 	for i := range u.navItems {
 		idx := i
 		if u.navItems[idx] != nil {
@@ -291,7 +296,7 @@ func runUI() {
 func (u *appUI) makeFrameless() {
 	hwnd := uintptr(u.mw.Handle())
 
-	// Native chrome kaldır
+	// Native chrome kaldır, WS_POPUP ekle
 	style := winGetLong(hwnd, gwlStyle)
 	style &^= wsCaption | wsSysMenu | wsThickFrame | wsMinBox | wsMaxBox | wsBorder
 	style |= wsPopup
@@ -302,14 +307,30 @@ func (u *appUI) makeFrameless() {
 	exStyle |= wsExAppWindow
 	winSetLong(hwnd, gwlExStyle, exStyle)
 
-	// Style değişikliğini uygula + pencereyi 440×660 olarak merkeze al
+	// DWM: caption rengini arka planla eşleştir (BGR — sarı/turuncu kaybolur)
+	// clrSidebar = RGB(9,12,20) → BGR COLORREF = 0x140c09
+	captionBGR := uint32(0x140c09)
+	dwmSetWindowAttr.Call(hwnd, uintptr(dwmwaCaptionColor),
+		uintptr(unsafe.Pointer(&captionBGR)), 4)
+
+	// DWM: border kaldır
+	borderNone := dwmwaColorNone
+	dwmSetWindowAttr.Call(hwnd, uintptr(dwmwaBorderColor),
+		uintptr(unsafe.Pointer(&borderNone)), 4)
+
+	// DWM dark mode
+	dark := uint32(1)
+	dwmSetWindowAttr.Call(hwnd, 20, uintptr(unsafe.Pointer(&dark)), 4)
+	dwmSetWindowAttr.Call(hwnd, 19, uintptr(unsafe.Pointer(&dark)), 4)
+
+	// Style değişikliğini uygula + ekran merkezine al
 	cx := int32(win.GetSystemMetrics(win.SM_CXSCREEN))
 	cy := int32(win.GetSystemMetrics(win.SM_CYSCREEN))
 	wx := (cx - 440) / 2
 	wy := (cy - 660) / 2
 	procSetWindowPos.Call(hwnd, 0,
 		uintptr(wx), uintptr(wy), 440, 660,
-		uintptr(swpNoZOrder|swpFrameChg))
+		uintptr(swpNoZOrder|swpFrameChg|swpNoCopyBits))
 }
 
 // ── Custom titlebar ───────────────────────────────────────────────────────────
@@ -317,70 +338,64 @@ func (u *appUI) makeFrameless() {
 func (u *appUI) buildTitleBar() Widget {
 	return Composite{
 		AssignTo: &u.titleBar,
-		MinSize:  Size{Height: 48},
-		MaxSize:  Size{Height: 48},
-		Layout:   HBox{Margins: Margins{Left: 12, Right: 8, Top: 0, Bottom: 0}, Spacing: 8},
+		MinSize:  Size{Height: 44},
+		MaxSize:  Size{Height: 44},
+		Layout:   HBox{Margins: Margins{Left: 12, Right: 4, Top: 0, Bottom: 0}, Spacing: 8},
 		Children: []Widget{
-			// Logo
 			ImageView{
 				AssignTo: &u.ivTitleLogo,
-				MinSize:  Size{Width: 28, Height: 28},
-				MaxSize:  Size{Width: 28, Height: 28},
+				MinSize:  Size{Width: 26, Height: 26},
+				MaxSize:  Size{Width: 26, Height: 26},
 				Mode:     ImageViewModeZoom,
 			},
-			// Uygulama adı + alt başlık
 			Composite{
 				Layout: VBox{MarginsZero: true, SpacingZero: true},
 				Children: []Widget{
 					Label{
 						AssignTo:  &u.lblTitleApp,
 						Text:      "SpAC3DPI",
-						Font:      Font{Family: "Segoe UI", Bold: true, PointSize: 11},
+						Font:      Font{Family: "Segoe UI", Bold: true, PointSize: 10},
 						TextColor: clrText,
 					},
 					Label{
 						AssignTo:  &u.lblTitleSub,
 						Text:      "DPI Bypass Proxy",
-						Font:      Font{Family: "Segoe UI", PointSize: 8},
+						Font:      Font{Family: "Segoe UI", PointSize: 7},
 						TextColor: clrSub,
 					},
 				},
 			},
 			HSpacer{},
-			// Minimize butonu
+			// Minimize
 			Composite{
 				AssignTo: &u.btnMinimize,
-				MinSize:  Size{Width: 40, Height: 40},
-				MaxSize:  Size{Width: 40, Height: 40},
-				Layout:   HBox{MarginsZero: true},
+				MinSize:  Size{Width: 38, Height: 44},
+				MaxSize:  Size{Width: 38, Height: 44},
+				Layout:   VBox{MarginsZero: true},
 				Children: []Widget{
-					HSpacer{},
 					Label{
 						AssignTo:  &u.lblMinimize,
-						Text:      "─",
-						Font:      Font{Family: "Segoe UI", PointSize: 11},
+						Text:      "—",
+						Font:      Font{Family: "Segoe UI", PointSize: 10},
 						TextColor: clrSub,
 						Alignment: AlignHCenterVCenter,
 					},
-					HSpacer{},
 				},
 			},
-			// Kapat butonu
+			// Kapat
 			Composite{
 				AssignTo: &u.btnClose,
-				MinSize:  Size{Width: 40, Height: 40},
-				MaxSize:  Size{Width: 40, Height: 40},
-				Layout:   HBox{MarginsZero: true},
+				MinSize:  Size{Width: 38, Height: 44},
+				MaxSize:  Size{Width: 38, Height: 44},
+				Layout:   VBox{MarginsZero: true},
 				Children: []Widget{
-					HSpacer{},
 					Label{
 						AssignTo:  &u.lblClose,
 						Text:      "✕",
-						Font:      Font{Family: "Segoe UI", PointSize: 11},
-						TextColor: walk.RGB(180, 80, 80),
+						Font:      Font{Family: "Segoe UI", PointSize: 10},
+						TextColor: walk.RGB(200, 80, 80),
 						Alignment: AlignHCenterVCenter,
 					},
-					HSpacer{},
 				},
 			},
 		},
@@ -397,7 +412,6 @@ func (u *appUI) wireTitleBar() {
 		}
 	}
 
-	// Titlebar boş alanı + metinler sürükleme başlatır
 	if u.titleBar != nil {
 		u.titleBar.MouseDown().Attach(beginDrag)
 	}
@@ -411,7 +425,6 @@ func (u *appUI) wireTitleBar() {
 		u.ivTitleLogo.MouseDown().Attach(beginDrag)
 	}
 
-	// Minimize
 	doMin := func(x, y int, button walk.MouseButton) {
 		if button == walk.LeftButton {
 			win.ShowWindow(u.mw.Handle(), win.SW_MINIMIZE)
@@ -424,7 +437,6 @@ func (u *appUI) wireTitleBar() {
 		u.lblMinimize.MouseDown().Attach(doMin)
 	}
 
-	// Kapat
 	doClose := func(x, y int, button walk.MouseButton) {
 		if button == walk.LeftButton {
 			u.mw.Synchronize(u.onQuit)
@@ -437,7 +449,6 @@ func (u *appUI) wireTitleBar() {
 		u.lblClose.MouseDown().Attach(doClose)
 	}
 
-	// Titlebar logo
 	if u.ivTitleLogo != nil {
 		if bmp := getLogoBitmap(false); bmp != nil {
 			u.ivTitleLogo.SetImage(bmp)
@@ -448,13 +459,14 @@ func (u *appUI) wireTitleBar() {
 // ── Sidebar ───────────────────────────────────────────────────────────────────
 
 var navIcons = [4]string{"◎", "⚙", "◈", "☰"}
+var navTips  = [4]string{"Durum", "Ayarlar", "Mobil", "Kayıtlar"}
 
 func (u *appUI) buildSidebar() Widget {
 	return Composite{
 		AssignTo: &u.sidebarComp,
-		MinSize:  Size{Width: 56},
-		MaxSize:  Size{Width: 56},
-		Layout:   VBox{MarginsZero: true, Spacing: 2},
+		MinSize:  Size{Width: 52},
+		MaxSize:  Size{Width: 52},
+		Layout:   VBox{MarginsZero: true, SpacingZero: true},
 		Children: []Widget{
 			u.navItem(navIcons[0], 0),
 			u.navItem(navIcons[1], 1),
@@ -465,27 +477,21 @@ func (u *appUI) buildSidebar() Widget {
 	}
 }
 
+// navItem — HSpacer yok, Label tüm alanı kaplar (click güvenilir çalışır).
 func (u *appUI) navItem(icon string, idx int) Widget {
 	return Composite{
 		AssignTo: &u.navItems[idx],
-		MinSize:  Size{Width: 56, Height: 52},
+		MinSize:  Size{Width: 52, Height: 50},
+		MaxSize:  Size{Width: 52, Height: 50},
 		Layout:   VBox{MarginsZero: true},
 		Children: []Widget{
-			VSpacer{},
-			Composite{
-				Layout: HBox{MarginsZero: true},
-				Children: []Widget{
-					HSpacer{},
-					Label{
-						AssignTo:  &u.navLabels[idx],
-						Text:      icon,
-						Font:      Font{Family: "Segoe UI", PointSize: 16},
-						TextColor: clrSub,
-					},
-					HSpacer{},
-				},
+			Label{
+				AssignTo:  &u.navLabels[idx],
+				Text:      icon,
+				Font:      Font{Family: "Segoe UI", PointSize: 15},
+				TextColor: clrSub,
+				Alignment: AlignHCenterVCenter,
 			},
-			VSpacer{},
 		},
 	}
 }
@@ -538,80 +544,44 @@ func (u *appUI) buildStatusPanel() Widget {
 		Layout:   VBox{MarginsZero: true, SpacingZero: true},
 		Children: []Widget{
 			ScrollView{
-				Layout: VBox{Margins: Margins{Left: 16, Right: 16, Top: 16, Bottom: 16}, Spacing: 14},
+				AssignTo: &u.svStatus,
+				Layout:   VBox{Margins: Margins{Left: 14, Right: 14, Top: 14, Bottom: 14}, Spacing: 12},
 				Children: []Widget{
-					// Logo + başlık (ortalı)
+					// Logo
 					Composite{
 						Layout: HBox{MarginsZero: true},
 						Children: []Widget{
 							HSpacer{},
-							Composite{
-								Layout: VBox{MarginsZero: true, Spacing: 6},
-								Children: []Widget{
-									Composite{
-										Layout: HBox{MarginsZero: true},
-										Children: []Widget{
-											HSpacer{},
-											ImageView{
-												AssignTo: &u.ivLogo,
-												MinSize:  Size{Width: 80, Height: 80},
-												MaxSize:  Size{Width: 80, Height: 80},
-												Mode:     ImageViewModeZoom,
-											},
-											HSpacer{},
-										},
-									},
-									Label{
-										Text:      "SpAC3DPI",
-										Font:      Font{Family: "Segoe UI", Bold: true, PointSize: 16},
-										TextColor: clrText,
-										Alignment: AlignHCenterVCenter,
-									},
-									Label{
-										Text:      "DPI Bypass Proxy",
-										Font:      Font{Family: "Segoe UI", PointSize: 9},
-										TextColor: clrSub,
-										Alignment: AlignHCenterVCenter,
-									},
-								},
+							ImageView{
+								AssignTo: &u.ivLogo,
+								MinSize:  Size{Width: 72, Height: 72},
+								MaxSize:  Size{Width: 72, Height: 72},
+								Mode:     ImageViewModeZoom,
 							},
 							HSpacer{},
 						},
 					},
-					// Durum göstergesi (ortalı)
-					Composite{
-						Layout: HBox{MarginsZero: true},
-						Children: []Widget{
-							HSpacer{},
-							Composite{
-								Layout: VBox{MarginsZero: true, Spacing: 4},
-								Children: []Widget{
-									Label{
-										AssignTo:  &u.lblStatus,
-										Text:      "●  BAĞLI DEĞİL",
-										Font:      Font{Family: "Segoe UI", Bold: true, PointSize: 18},
-										TextColor: clrRed,
-										Alignment: AlignHCenterVCenter,
-									},
-									Label{
-										AssignTo:  &u.lblIPInfo,
-										Text:      "—",
-										Font:      Font{Family: "Segoe UI", PointSize: 9},
-										TextColor: clrSub,
-										Alignment: AlignHCenterVCenter,
-									},
-								},
-							},
-							HSpacer{},
-						},
+					// Durum metni
+					Label{
+						AssignTo:  &u.lblStatus,
+						Text:      "●  BAĞLI DEĞİL",
+						Font:      Font{Family: "Segoe UI", Bold: true, PointSize: 16},
+						TextColor: clrRed,
+						Alignment: AlignHCenterVCenter,
 					},
-					// Tam genişlik başlat/durdur butonu
+					Label{
+						AssignTo:  &u.lblIPInfo,
+						Text:      "—",
+						Font:      Font{Family: "Segoe UI", PointSize: 9},
+						TextColor: clrSub,
+						Alignment: AlignHCenterVCenter,
+					},
+					// Start/Stop butonu — HSpacer YOK, label tüm alanı kaplar
 					Composite{
 						AssignTo: &u.btnPanel,
-						Layout:   HBox{MarginsZero: true},
-						MinSize:  Size{Height: 46},
+						MinSize:  Size{Height: 44},
+						Layout:   VBox{MarginsZero: true},
 						Children: []Widget{
-							HSpacer{},
 							Label{
 								AssignTo:  &u.lblToggle,
 								Text:      "▶   BAŞLAT",
@@ -619,78 +589,62 @@ func (u *appUI) buildStatusPanel() Widget {
 								TextColor: walk.RGB(255, 255, 255),
 								Alignment: AlignHCenterVCenter,
 							},
-							HSpacer{},
 						},
 					},
 					// Mini istatistikler
 					Composite{
-						Layout: HBox{MarginsZero: true, Spacing: 24},
+						Layout: Grid{Columns: 3, Spacing: 4},
 						Children: []Widget{
-							HSpacer{},
 							u.miniStat(&u.lblUptime, "SÜRE"),
 							u.miniStat(&u.lblActive, "BAĞ"),
 							u.miniStat(&u.lblBytes, "VERİ"),
-							HSpacer{},
 						},
 					},
 					// Alt durum çubuğu
 					Label{
 						AssignTo:  &u.lblStatusBar,
-						Text:      "Proxy: —  PAC: —  DPI: —  QR: —",
+						Text:      "Proxy: —  PAC: —  DPI: —",
 						Font:      Font{Family: "Segoe UI", PointSize: 8},
 						TextColor: clrSub,
 						Alignment: AlignHCenterVCenter,
 					},
-					// ── Detay: İstatistikler ──────────────────────────────────
-					u.cardSection("İstatistikler",
-						Composite{
-							Layout: HBox{MarginsZero: true, Spacing: 8},
-							Children: []Widget{
-								u.statCard("Toplam", &u.lblTotal),
-								u.statCard("Hatalar", &u.lblErrors),
-								u.statCard("Watchdog", &u.lblRestarts),
-							},
-						},
-					),
-					// ── Detay: Servis Durumu ──────────────────────────────────
+					// Servis durumu kartı
 					u.cardSection("Servis Durumu",
 						Composite{
-							Layout: Grid{Columns: 2, Spacing: 5},
+							Layout: VBox{MarginsZero: true, Spacing: 3},
 							Children: []Widget{
-								Label{Text: "HTTP Proxy", TextColor: clrSub, Font: Font{Family: "Segoe UI", PointSize: 9}},
-								Label{AssignTo: &u.lblProxy, Text: "—", TextColor: clrText, Font: Font{Family: "Segoe UI", PointSize: 9}},
-								Label{Text: "PAC Sunucu", TextColor: clrSub, Font: Font{Family: "Segoe UI", PointSize: 9}},
-								Label{AssignTo: &u.lblPACSvc, Text: "—", TextColor: clrText, Font: Font{Family: "Segoe UI", PointSize: 9}},
-								Label{Text: "GoodbyeDPI", TextColor: clrSub, Font: Font{Family: "Segoe UI", PointSize: 9}},
-								Label{AssignTo: &u.lblGDPI, Text: "—", TextColor: clrText, Font: Font{Family: "Segoe UI", PointSize: 9}},
-								Label{Text: "DNS", TextColor: clrSub, Font: Font{Family: "Segoe UI", PointSize: 9}},
-								Label{AssignTo: &u.lblDNSSvc, Text: "—", TextColor: clrText, Font: Font{Family: "Segoe UI", PointSize: 9}},
-								Label{Text: "Sistem Proxy", TextColor: clrSub, Font: Font{Family: "Segoe UI", PointSize: 9}},
-								Label{AssignTo: &u.lblSysProxy, Text: "—", TextColor: clrText, Font: Font{Family: "Segoe UI", PointSize: 9}},
+								u.kvRow("HTTP Proxy", &u.lblProxy),
+								u.kvRow("PAC Sunucu", &u.lblPACSvc),
+								u.kvRow("GoodbyeDPI", &u.lblGDPI),
+								u.kvRow("DNS", &u.lblDNSSvc),
+								u.kvRow("Sistem Proxy", &u.lblSysProxy),
 							},
 						},
 					),
-					// ── Detay: Ağ Bilgisi ─────────────────────────────────────
+					// İstatistikler kartı
+					u.cardSection("İstatistikler",
+						Composite{
+							Layout: Grid{Columns: 3, Spacing: 4},
+							Children: []Widget{
+								u.statChip("Toplam", &u.lblTotal),
+								u.statChip("Hata", &u.lblErrors),
+								u.statChip("Watchdog", &u.lblRestarts),
+							},
+						},
+					),
+					// Ağ bilgisi kartı
 					u.cardSection("Ağ Bilgisi",
 						Composite{
-							Layout: Grid{Columns: 2, Spacing: 5},
+							Layout: VBox{MarginsZero: true, Spacing: 3},
 							Children: []Widget{
-								Label{Text: "PC IP", TextColor: clrSub, Font: Font{Family: "Segoe UI", PointSize: 9}},
-								Label{AssignTo: &u.lblIP, Text: "—", TextColor: clrText, Font: Font{Family: "Segoe UI", PointSize: 9}},
-								Label{Text: "Proxy Adresi", TextColor: clrSub, Font: Font{Family: "Segoe UI", PointSize: 9}},
-								Label{AssignTo: &u.lblProxyAddr, Text: "—", TextColor: clrText, Font: Font{Family: "Segoe UI", PointSize: 9}},
-								Label{Text: "PAC URL", TextColor: clrSub, Font: Font{Family: "Segoe UI", PointSize: 9}},
-								Label{AssignTo: &u.lblPACURL, Text: "—", TextColor: clrText, Font: Font{Family: "Segoe UI", PointSize: 9}},
-								Label{Text: "DPI Modu", TextColor: clrSub, Font: Font{Family: "Segoe UI", PointSize: 9}},
-								Label{AssignTo: &u.lblDPIMode, Text: "—", TextColor: clrText, Font: Font{Family: "Segoe UI", PointSize: 9}},
-								Label{Text: "Chunk", TextColor: clrSub, Font: Font{Family: "Segoe UI", PointSize: 9}},
-								Label{AssignTo: &u.lblChunkSvc, Text: "—", TextColor: clrText, Font: Font{Family: "Segoe UI", PointSize: 9}},
-								Label{Text: "ISP", TextColor: clrSub, Font: Font{Family: "Segoe UI", PointSize: 9}},
-								Label{AssignTo: &u.lblISPSvc, Text: "—", TextColor: clrText, Font: Font{Family: "Segoe UI", PointSize: 9}},
-								Label{Text: "GDPI Bayrakları", TextColor: clrSub, Font: Font{Family: "Segoe UI", PointSize: 9}},
-								Label{AssignTo: &u.lblGDPIFlags, Text: "—", TextColor: clrText, Font: Font{Family: "Segoe UI", PointSize: 9}},
-								Label{Text: "DNS Sağlayıcı", TextColor: clrSub, Font: Font{Family: "Segoe UI", PointSize: 9}},
-								Label{AssignTo: &u.lblDNSMode, Text: "—", TextColor: clrText, Font: Font{Family: "Segoe UI", PointSize: 9}},
+								u.kvRow("PC IP", &u.lblIP),
+								u.kvRow("Proxy", &u.lblProxyAddr),
+								u.kvRow("PAC URL", &u.lblPACURL),
+								u.kvRow("DPI Modu", &u.lblDPIMode),
+								u.kvRow("Chunk", &u.lblChunkSvc),
+								u.kvRow("ISP", &u.lblISPSvc),
+								u.kvRow("DNS", &u.lblDNSMode),
+								u.kvRow("GDPI Flags", &u.lblGDPIFlags),
 							},
 						},
 					),
@@ -700,10 +654,9 @@ func (u *appUI) buildStatusPanel() Widget {
 	}
 }
 
-// cardSection — başlıklı koyu card composite.
 func (u *appUI) cardSection(title string, content Widget) Widget {
 	return Composite{
-		Layout: VBox{Margins: Margins{Left: 10, Right: 10, Top: 8, Bottom: 10}, Spacing: 8},
+		Layout: VBox{Margins: Margins{Left: 0, Right: 0, Top: 4, Bottom: 4}, Spacing: 6},
 		Children: []Widget{
 			Label{
 				Text:      strings.ToUpper(title),
@@ -715,20 +668,63 @@ func (u *appUI) cardSection(title string, content Widget) Widget {
 	}
 }
 
-func (u *appUI) statCard(title string, ref **walk.Label) Widget {
+// kvRow — sabit genişlik key + değer label satırı
+func (u *appUI) kvRow(key string, ref **walk.Label) Widget {
 	return Composite{
-		Layout: VBox{Margins: Margins{Left: 6, Right: 6, Top: 6, Bottom: 8}, Spacing: 2},
+		Layout: HBox{MarginsZero: true, Spacing: 8},
+		Children: []Widget{
+			Label{
+				Text:      key,
+				TextColor: clrSub,
+				Font:      Font{Family: "Segoe UI", PointSize: 9},
+				MinSize:   Size{Width: 88},
+				MaxSize:   Size{Width: 88},
+			},
+			Label{
+				AssignTo:  ref,
+				Text:      "—",
+				TextColor: clrText,
+				Font:      Font{Family: "Segoe UI", PointSize: 9},
+			},
+		},
+	}
+}
+
+func (u *appUI) statChip(title string, ref **walk.Label) Widget {
+	return Composite{
+		Layout: VBox{Margins: Margins{Left: 4, Right: 4, Top: 6, Bottom: 6}, Spacing: 2},
 		Children: []Widget{
 			Label{
 				AssignTo:  ref,
 				Text:      "—",
-				Font:      Font{Family: "Segoe UI", Bold: true, PointSize: 20},
+				Font:      Font{Family: "Segoe UI", Bold: true, PointSize: 18},
 				TextColor: clrText,
 				Alignment: AlignHCenterVCenter,
 			},
 			Label{
 				Text:      title,
-				Font:      Font{Family: "Segoe UI", PointSize: 8},
+				Font:      Font{Family: "Segoe UI", PointSize: 7},
+				TextColor: clrSub,
+				Alignment: AlignHCenterVCenter,
+			},
+		},
+	}
+}
+
+func (u *appUI) miniStat(ref **walk.Label, caption string) Widget {
+	return Composite{
+		Layout: VBox{MarginsZero: true, SpacingZero: true},
+		Children: []Widget{
+			Label{
+				AssignTo:  ref,
+				Text:      "—",
+				Font:      Font{Family: "Segoe UI", Bold: true, PointSize: 12},
+				TextColor: clrText,
+				Alignment: AlignHCenterVCenter,
+			},
+			Label{
+				Text:      caption,
+				Font:      Font{Family: "Segoe UI", PointSize: 7},
 				TextColor: clrSub,
 				Alignment: AlignHCenterVCenter,
 			},
@@ -745,127 +741,124 @@ func (u *appUI) buildSettingsPanel() Widget {
 		Visible:  false,
 		Children: []Widget{
 			ScrollView{
-				Layout: VBox{Margins: Margins{Left: 12, Right: 12, Top: 10, Bottom: 10}, Spacing: 8},
+				AssignTo: &u.svSettings,
+				Layout:   VBox{Margins: Margins{Left: 12, Right: 12, Top: 10, Bottom: 10}, Spacing: 10},
 				Children: []Widget{
-					GroupBox{
-						Title:  "DPI Bypass Modu",
-						Layout: VBox{},
-						Children: []Widget{
-							ComboBox{
-								AssignTo:              &u.cbDPI,
-								Model:                 []string{"⚡ Turbo — Hız öncelikli", "⚖ Dengeli — Standart (Önerilen)", "🔥 Güçlü — Paket parçalama", "🛠 Özel — Manuel bayraklar"},
-								CurrentIndex:          1,
-								OnCurrentIndexChanged: u.onDPIModeChange,
-							},
-							LineEdit{
-								AssignTo:  &u.leCustomFlags,
-								CueBanner: "-1 -p -q -r -s -e 40 --new-mode",
-								Visible:   false,
-							},
-							Composite{
-								Layout: HBox{MarginsZero: true, Spacing: 6},
-								Children: []Widget{
-									Label{Text: "Chunk:", TextColor: clrText},
-									ComboBox{
-										AssignTo:     &u.cbChunk,
-										Model:        []string{"4 byte", "8 byte", "16 byte", "40 byte"},
-										CurrentIndex: 3,
-										MaxSize:      Size{Width: 90},
-									},
-									Label{Text: "ISP:", TextColor: clrText},
-									ComboBox{
-										AssignTo:     &u.cbISP,
-										Model:        []string{"Otomatik", "Superonline / UltraNet", "Türk Telekom", "Vodafone TR", "Turkcell"},
-										CurrentIndex: 0,
-										MaxSize:      Size{Width: 180},
-									},
-									HSpacer{},
+					u.settingsGroup("DPI Bypass Modu", []Widget{
+						ComboBox{
+							AssignTo:              &u.cbDPI,
+							Model:                 []string{"Turbo — Hız öncelikli", "Dengeli — Standart (Önerilen)", "Güçlü — Paket parçalama", "Özel — Manuel bayraklar"},
+							CurrentIndex:          1,
+							OnCurrentIndexChanged: u.onDPIModeChange,
+						},
+						LineEdit{
+							AssignTo:  &u.leCustomFlags,
+							CueBanner: "-1 -p -q -r -s -e 40 --new-mode",
+							Visible:   false,
+						},
+						Composite{
+							Layout: HBox{MarginsZero: true, Spacing: 6},
+							Children: []Widget{
+								Label{Text: "Chunk:", TextColor: clrText, Font: Font{Family: "Segoe UI", PointSize: 9}},
+								ComboBox{
+									AssignTo:     &u.cbChunk,
+									Model:        []string{"4 byte", "8 byte", "16 byte", "40 byte"},
+									CurrentIndex: 3,
+									MaxSize:      Size{Width: 90},
 								},
-							},
-						},
-					},
-					GroupBox{
-						Title:  "DNS Şifreleme",
-						Layout: HBox{},
-						Children: []Widget{
-							ComboBox{
-								AssignTo:     &u.cbDNS,
-								Model:        []string{"🔒 Değiştirilmesin", "☁ Cloudflare (1.1.1.1)", "🌐 Google (8.8.8.8)", "🛡 AdGuard", "🔐 Quad9", "🌍 OpenDNS"},
-								CurrentIndex: 0,
-								MaxSize:      Size{Width: 270},
-							},
-							HSpacer{},
-						},
-					},
-					GroupBox{
-						Title:  "DPI Kaynağı",
-						Layout: VBox{Spacing: 4},
-						Children: []Widget{
-							RadioButton{
-								AssignTo:  &u.rbDPIAuto,
-								Text:      "Otomatik (önerilen) — Servis → Proses → Manuel → Bundle",
-								Value:     "auto",
-								OnClicked: u.onDPISourceChange,
-							},
-							RadioButton{
-								AssignTo:  &u.rbDPIService,
-								Text:      "Sistem Servisi — Sadece Windows servisi",
-								Value:     "service",
-								OnClicked: u.onDPISourceChange,
-							},
-							RadioButton{
-								AssignTo:  &u.rbDPIManual,
-								Text:      "Manuel Yol — Aşağıdaki goodbyedpi.exe",
-								Value:     "manual",
-								OnClicked: u.onDPISourceChange,
-							},
-							Composite{
-								AssignTo: &u.gdpiPathComp,
-								Visible:  false,
-								Layout:   HBox{MarginsZero: true, Spacing: 4},
-								Children: []Widget{
-									LineEdit{AssignTo: &u.leGDPIPath, CueBanner: `C:\GoodbyeDPI\goodbyedpi.exe`},
-									PushButton{Text: "Bul", OnClicked: u.onAutoDetectGDPI, MaxSize: Size{Width: 60}},
+								Label{Text: "ISP:", TextColor: clrText, Font: Font{Family: "Segoe UI", PointSize: 9}},
+								ComboBox{
+									AssignTo:     &u.cbISP,
+									Model:        []string{"Otomatik", "Superonline / UltraNet", "Türk Telekom", "Vodafone TR", "Turkcell"},
+									CurrentIndex: 0,
 								},
-							},
-							RadioButton{
-								AssignTo:  &u.rbDPIDisabled,
-								Text:      "Devre Dışı — Sadece Proxy + PAC",
-								Value:     "disabled",
-								OnClicked: u.onDPISourceChange,
+								HSpacer{},
 							},
 						},
-					},
-					GroupBox{
-						Title:  "Sistem",
-						Layout: VBox{Spacing: 4},
-						Children: []Widget{
-							CheckBox{AssignTo: &u.chkSysProxy, Text: "Windows sistem proxy'sini otomatik ayarla"},
-							CheckBox{AssignTo: &u.chkAutoStart, Text: "Windows ile otomatik başlat"},
+					}),
+					u.settingsGroup("DNS Şifreleme", []Widget{
+						ComboBox{
+							AssignTo:     &u.cbDNS,
+							Model:        []string{"Değiştirilmesin", "Cloudflare (1.1.1.1)", "Google (8.8.8.8)", "AdGuard", "Quad9", "OpenDNS"},
+							CurrentIndex: 0,
 						},
-					},
-					GroupBox{
-						Title:  "Ağ Portları",
-						Layout: HBox{},
-						Children: []Widget{
-							Label{Text: "Proxy:", TextColor: clrText},
-							NumberEdit{AssignTo: &u.neProxyPort, MinValue: 1, MaxValue: 65535, Decimals: 0, MaxSize: Size{Width: 80}},
-							Label{Text: "  PAC:", TextColor: clrText},
-							NumberEdit{AssignTo: &u.nePACPort, MinValue: 1, MaxValue: 65535, Decimals: 0, MaxSize: Size{Width: 80}},
-							HSpacer{},
+					}),
+					u.settingsGroup("DPI Kaynağı", []Widget{
+						RadioButton{
+							AssignTo:  &u.rbDPIAuto,
+							Text:      "Otomatik (önerilen)",
+							Value:     "auto",
+							OnClicked: u.onDPISourceChange,
 						},
-					},
+						RadioButton{
+							AssignTo:  &u.rbDPIService,
+							Text:      "Sistem Servisi",
+							Value:     "service",
+							OnClicked: u.onDPISourceChange,
+						},
+						RadioButton{
+							AssignTo:  &u.rbDPIManual,
+							Text:      "Manuel Yol",
+							Value:     "manual",
+							OnClicked: u.onDPISourceChange,
+						},
+						Composite{
+							AssignTo: &u.gdpiPathComp,
+							Visible:  false,
+							Layout:   HBox{MarginsZero: true, Spacing: 4},
+							Children: []Widget{
+								LineEdit{AssignTo: &u.leGDPIPath, CueBanner: `C:\GoodbyeDPI\goodbyedpi.exe`},
+								PushButton{Text: "Bul", OnClicked: u.onAutoDetectGDPI, MaxSize: Size{Width: 55}},
+							},
+						},
+						RadioButton{
+							AssignTo:  &u.rbDPIDisabled,
+							Text:      "Devre Dışı — Sadece Proxy + PAC",
+							Value:     "disabled",
+							OnClicked: u.onDPISourceChange,
+						},
+					}),
+					u.settingsGroup("Ağ Portları", []Widget{
+						Composite{
+							Layout: HBox{MarginsZero: true, Spacing: 8},
+							Children: []Widget{
+								Label{Text: "Proxy:", TextColor: clrText, Font: Font{Family: "Segoe UI", PointSize: 9}},
+								NumberEdit{AssignTo: &u.neProxyPort, MinValue: 1, MaxValue: 65535, Decimals: 0, MaxSize: Size{Width: 70}},
+								Label{Text: "PAC:", TextColor: clrText, Font: Font{Family: "Segoe UI", PointSize: 9}},
+								NumberEdit{AssignTo: &u.nePACPort, MinValue: 1, MaxValue: 65535, Decimals: 0, MaxSize: Size{Width: 70}},
+								HSpacer{},
+							},
+						},
+					}),
+					u.settingsGroup("Sistem", []Widget{
+						CheckBox{AssignTo: &u.chkSysProxy, Text: "Windows sistem proxy'sini otomatik ayarla"},
+						CheckBox{AssignTo: &u.chkAutoStart, Text: "Windows ile otomatik başlat"},
+					}),
 					Composite{
-						Layout: HBox{MarginsZero: true},
+						Layout: HBox{MarginsZero: true, Spacing: 8},
 						Children: []Widget{
-							PushButton{Text: "💾  Kaydet ve Uygula", OnClicked: u.onSaveSettings},
-							Label{AssignTo: &u.lblSaveStatus, TextColor: clrGreen},
+							PushButton{Text: "Kaydet ve Uygula", OnClicked: u.onSaveSettings, MinSize: Size{Width: 140}},
+							Label{AssignTo: &u.lblSaveStatus, TextColor: clrGreen, Font: Font{Family: "Segoe UI", PointSize: 9}},
 							HSpacer{},
 						},
 					},
 				},
 			},
 		},
+	}
+}
+
+func (u *appUI) settingsGroup(title string, children []Widget) Widget {
+	all := make([]Widget, 0, len(children)+1)
+	all = append(all, Label{
+		Text:      strings.ToUpper(title),
+		Font:      Font{Family: "Segoe UI", PointSize: 8, Bold: true},
+		TextColor: clrSub,
+	})
+	all = append(all, children...)
+	return Composite{
+		Layout:   VBox{Margins: Margins{Left: 0, Right: 0, Top: 2, Bottom: 6}, Spacing: 6},
+		Children: all,
 	}
 }
 
@@ -878,75 +871,47 @@ func (u *appUI) buildMobilePanel() Widget {
 		Visible:  false,
 		Children: []Widget{
 			ScrollView{
-				Layout: VBox{Margins: Margins{Left: 12, Right: 12, Top: 10, Bottom: 10}, Spacing: 10},
+				AssignTo: &u.svMobile,
+				Layout:   VBox{Margins: Margins{Left: 12, Right: 12, Top: 12, Bottom: 12}, Spacing: 10},
 				Children: []Widget{
+					Label{
+						Text:      "ROUTER PAC URL (ÖNERİLEN)",
+						Font:      Font{Family: "Segoe UI", PointSize: 8, Bold: true},
+						TextColor: clrSub,
+					},
+					LineEdit{AssignTo: &u.leQRURL, ReadOnly: true},
+					PushButton{Text: "Kopyala", OnClicked: u.onCopyPACURL, MaxSize: Size{Width: 80}},
+					Label{
+						Text:      "PC PAC URL (ALTERNATİF)",
+						Font:      Font{Family: "Segoe UI", PointSize: 8, Bold: true},
+						TextColor: clrSub,
+					},
+					LineEdit{AssignTo: &u.lePCPACURL, ReadOnly: true},
+					PushButton{Text: "Kopyala", OnClicked: u.onCopyPCPACURL, MaxSize: Size{Width: 80}},
+					// QR
 					Composite{
-						Layout: HBox{MarginsZero: true, Spacing: 16},
+						Layout: HBox{MarginsZero: true},
 						Children: []Widget{
-							Composite{
-								Layout: VBox{MarginsZero: true, Spacing: 6},
-								Children: []Widget{
-									Label{Text: "Router PAC URL (Önerilen)", TextColor: clrText,
-										Font: Font{Family: "Segoe UI", Bold: true, PointSize: 9}},
-									LineEdit{AssignTo: &u.leQRURL, ReadOnly: true},
-									PushButton{Text: "Kopyala", OnClicked: u.onCopyPACURL, MaxSize: Size{Width: 90}},
-									Label{Text: "PC PAC URL (alternatif)", TextColor: clrSub,
-										Font: Font{Family: "Segoe UI", PointSize: 9}},
-									LineEdit{AssignTo: &u.lePCPACURL, ReadOnly: true},
-									PushButton{Text: "Kopyala", OnClicked: u.onCopyPCPACURL, MaxSize: Size{Width: 90}},
-									ImageView{
-										AssignTo: &u.ivQR,
-										Mode:     ImageViewModeZoom,
-										MinSize:  Size{Width: 160, Height: 160},
-										MaxSize:  Size{Width: 160, Height: 160},
-									},
-								},
+							HSpacer{},
+							ImageView{
+								AssignTo: &u.ivQR,
+								Mode:     ImageViewModeZoom,
+								MinSize:  Size{Width: 180, Height: 180},
+								MaxSize:  Size{Width: 180, Height: 180},
 							},
-							Composite{
-								Layout: VBox{MarginsZero: true, Spacing: 8},
-								Children: []Widget{
-									GroupBox{
-										Title:  "Android",
-										Layout: VBox{Spacing: 3},
-										Children: []Widget{
-											Label{Text: "1. Telefon ve PC aynı Wi-Fi'da olsun", TextColor: clrText,
-												Font: Font{Family: "Segoe UI", PointSize: 9}},
-											Label{Text: "2. Wi-Fi'ye uzun bas → Ağı değiştir", TextColor: clrText,
-												Font: Font{Family: "Segoe UI", PointSize: 9}},
-											Label{Text: "3. Proxy → Otomatik", TextColor: clrText,
-												Font: Font{Family: "Segoe UI", PointSize: 9}},
-											Label{Text: "4. PAC URL'yi yapıştır → Kaydet", TextColor: clrText,
-												Font: Font{Family: "Segoe UI", PointSize: 9}},
-										},
-									},
-									GroupBox{
-										Title:  "iOS",
-										Layout: VBox{Spacing: 3},
-										Children: []Widget{
-											Label{Text: "1. Ayarlar → Wi-Fi → (i) simgesi", TextColor: clrText,
-												Font: Font{Family: "Segoe UI", PointSize: 9}},
-											Label{Text: "2. Proxy Yapılandırması → Otomatik", TextColor: clrText,
-												Font: Font{Family: "Segoe UI", PointSize: 9}},
-											Label{Text: "3. PAC URL'yi gir → Kaydet", TextColor: clrText,
-												Font: Font{Family: "Segoe UI", PointSize: 9}},
-										},
-									},
-									GroupBox{
-										Title:  "Windows",
-										Layout: VBox{Spacing: 3},
-										Children: []Widget{
-											Label{Text: "1. Ayarlar → Ağ → Proxy", TextColor: clrText,
-												Font: Font{Family: "Segoe UI", PointSize: 9}},
-											Label{Text: "2. Otomatik proxy kurulumu → Açık", TextColor: clrText,
-												Font: Font{Family: "Segoe UI", PointSize: 9}},
-											Label{Text: "3. PAC URL'yi girin", TextColor: clrText,
-												Font: Font{Family: "Segoe UI", PointSize: 9}},
-										},
-									},
-								},
-							},
+							HSpacer{},
 						},
 					},
+					u.settingsGroup("Android", []Widget{
+						Label{Text: "1. Telefon ve PC aynı Wi-Fi'da olsun", TextColor: clrText, Font: Font{Family: "Segoe UI", PointSize: 9}},
+						Label{Text: "2. Wi-Fi'ye uzun bas → Ağı değiştir", TextColor: clrText, Font: Font{Family: "Segoe UI", PointSize: 9}},
+						Label{Text: "3. Proxy → Otomatik → PAC URL'yi gir", TextColor: clrText, Font: Font{Family: "Segoe UI", PointSize: 9}},
+					}),
+					u.settingsGroup("iOS", []Widget{
+						Label{Text: "1. Ayarlar → Wi-Fi → (i) simgesi", TextColor: clrText, Font: Font{Family: "Segoe UI", PointSize: 9}},
+						Label{Text: "2. Proxy Yapılandırması → Otomatik", TextColor: clrText, Font: Font{Family: "Segoe UI", PointSize: 9}},
+						Label{Text: "3. PAC URL'yi gir → Kaydet", TextColor: clrText, Font: Font{Family: "Segoe UI", PointSize: 9}},
+					}),
 				},
 			},
 		},
@@ -958,63 +923,36 @@ func (u *appUI) buildMobilePanel() Widget {
 func (u *appUI) buildLogsPanel() Widget {
 	return Composite{
 		AssignTo: &u.panelLogs,
-		Layout:   VBox{Margins: Margins{Left: 12, Right: 12, Top: 10, Bottom: 10}, Spacing: 6},
+		Layout:   VBox{Margins: Margins{Left: 10, Right: 10, Top: 8, Bottom: 8}, Spacing: 6},
 		Visible:  false,
 		Children: []Widget{
 			Composite{
 				Layout: HBox{MarginsZero: true, Spacing: 6},
 				Children: []Widget{
-					PushButton{Text: "Temizle", OnClicked: u.onClearLogs, MaxSize: Size{Width: 80}},
-					PushButton{Text: "Kopyala", OnClicked: u.onCopyLogs, MaxSize: Size{Width: 80}},
-					CheckBox{AssignTo: &u.chkAutoScroll, Text: "Otomatik kaydır", Checked: true},
+					PushButton{Text: "Temizle", OnClicked: u.onClearLogs, MaxSize: Size{Width: 75}},
+					PushButton{Text: "Kopyala", OnClicked: u.onCopyLogs, MaxSize: Size{Width: 75}},
+					CheckBox{AssignTo: &u.chkAutoScroll, Text: "Oto. kaydır", Checked: true},
 					HSpacer{},
 					Label{AssignTo: &u.lblLogCount, Text: "0 kayıt", TextColor: clrSub,
 						Font: Font{Family: "Segoe UI", PointSize: 9}},
 				},
 			},
-			Composite{
-				AssignTo: &u.logContent,
-				Layout:   VBox{MarginsZero: true, SpacingZero: true},
-				Children: []Widget{
-					TableView{
-						AssignTo:            &u.tvLog,
-						Model:               u.logModel,
-						LastColumnStretched: true,
-						AlternatingRowBG:    true,
-						Columns: []TableViewColumn{
-							{Title: "Zaman", Width: 65},
-							{Title: "Seviye", Width: 55},
-							{Title: "Mesaj"},
-						},
-					},
+			TableView{
+				AssignTo:            &u.tvLog,
+				Model:               u.logModel,
+				LastColumnStretched: true,
+				AlternatingRowBG:    true,
+				Columns: []TableViewColumn{
+					{Title: "Zaman", Width: 65},
+					{Title: "Seviye", Width: 52},
+					{Title: "Mesaj"},
 				},
 			},
 		},
 	}
 }
 
-// ── Yardımcılar ──────────────────────────────────────────────────────────────
-
-func (u *appUI) miniStat(ref **walk.Label, caption string) Widget {
-	return Composite{
-		Layout: VBox{MarginsZero: true, SpacingZero: true},
-		Children: []Widget{
-			Label{
-				AssignTo:  ref,
-				Text:      "—",
-				Font:      Font{Family: "Segoe UI", Bold: true, PointSize: 14},
-				TextColor: clrText,
-				Alignment: AlignHCenterVCenter,
-			},
-			Label{
-				Text:      caption,
-				Font:      Font{Family: "Segoe UI", PointSize: 7},
-				TextColor: clrSub,
-				Alignment: AlignHCenterVCenter,
-			},
-		},
-	}
-}
+// ── Tema uygulama ─────────────────────────────────────────────────────────────
 
 func setBrush(c *walk.Composite, col walk.Color) {
 	if c == nil {
@@ -1029,28 +967,34 @@ func (u *appUI) applyTheme() {
 	if br, err := walk.NewSolidColorBrush(clrBg); err == nil {
 		u.mw.SetBackground(br)
 	}
-	setBrush(u.sidebarComp, clrSidebar)
 	setBrush(u.titleBar, clrSidebar)
+	setBrush(u.sidebarComp, clrSidebar)
 	setBrush(u.btnPanel, clrBtnOff)
 
-	// Sidebar card section arka planları
-	for _, card := range []*walk.Composite{} {
-		setBrush(card, clrCard)
+	// ScrollView arka planları
+	for _, sv := range []*walk.ScrollView{u.svStatus, u.svSettings, u.svMobile} {
+		if sv == nil {
+			continue
+		}
+		if br, err := walk.NewSolidColorBrush(clrBg); err == nil {
+			sv.SetBackground(br)
+		}
 	}
 
+	// Başlat/durdur click handler'ı
 	if u.btnPanel != nil {
 		u.btnPanel.MouseDown().Attach(func(x, y int, button walk.MouseButton) {
 			if button == walk.LeftButton {
 				u.mw.Synchronize(u.onToggle)
 			}
 		})
-		if u.lblToggle != nil {
-			u.lblToggle.MouseDown().Attach(func(x, y int, button walk.MouseButton) {
-				if button == walk.LeftButton {
-					u.mw.Synchronize(u.onToggle)
-				}
-			})
-		}
+	}
+	if u.lblToggle != nil {
+		u.lblToggle.MouseDown().Attach(func(x, y int, button walk.MouseButton) {
+			if button == walk.LeftButton {
+				u.mw.Synchronize(u.onToggle)
+			}
+		})
 	}
 
 	if u.ivLogo != nil {
@@ -1058,15 +1002,6 @@ func (u *appUI) applyTheme() {
 			u.ivLogo.SetImage(bmp)
 		}
 	}
-}
-
-// ── Dark title bar (DWM) ─────────────────────────────────────────────────────
-
-func (u *appUI) darkTitleBar() {
-	dark := uint32(1)
-	hwnd := uintptr(u.mw.Handle())
-	dwmSetWindowAttr.Call(hwnd, 20, uintptr(unsafe.Pointer(&dark)), 4)
-	dwmSetWindowAttr.Call(hwnd, 19, uintptr(unsafe.Pointer(&dark)), 4)
 }
 
 // ── Tray ─────────────────────────────────────────────────────────────────────
@@ -1116,7 +1051,6 @@ func (u *appUI) showWindow() {
 	win.ShowWindow(u.mw.Handle(), win.SW_RESTORE)
 }
 
-// onQuit — tray "Çıkış" + titlebar close butonu ortak logic.
 func (u *appUI) onQuit() {
 	appExiting = true
 	u.mw.Hide()
@@ -1166,7 +1100,7 @@ func (u *appUI) refreshStatus() {
 	if winIco := getIcon(s.Running); winIco != nil {
 		u.mw.SetIcon(winIco)
 	}
-	// Hero + titlebar logoları senkronize güncelle
+
 	if bmp := getLogoBitmap(s.Running); bmp != nil {
 		if u.ivLogo != nil {
 			u.ivLogo.SetImage(bmp)
@@ -1195,6 +1129,7 @@ func (u *appUI) refreshStatus() {
 			setBrush(u.btnPanel, clrBtnOff)
 		}
 	}
+
 	if u.lblIPInfo != nil {
 		if s.Running && s.LocalIP != "" {
 			u.lblIPInfo.SetText(fmt.Sprintf("%s : %d", s.LocalIP, s.ProxyPort))
@@ -1212,35 +1147,35 @@ func (u *appUI) refreshStatus() {
 	setLbl(u.lblRestarts, strconv.FormatInt(s.Restarts, 10))
 
 	if s.Running {
-		setLbl(u.lblProxy, fmt.Sprintf("✔ Çalışıyor — :%d", s.ProxyPort))
-		setLbl(u.lblPACSvc, fmt.Sprintf("✔ Çalışıyor — :%d", s.PACPort))
+		setLbl(u.lblProxy, fmt.Sprintf("✔  :%d", s.ProxyPort))
+		setLbl(u.lblPACSvc, fmt.Sprintf("✔  :%d", s.PACPort))
 	} else {
-		setLbl(u.lblProxy, "✘ Durduruldu")
-		setLbl(u.lblPACSvc, "✘ Durduruldu")
+		setLbl(u.lblProxy, "✘  Durduruldu")
+		setLbl(u.lblPACSvc, "✘  Durduruldu")
 	}
 
 	if s.GDPIRunning {
-		setLbl(u.lblGDPI, "✔ "+s.DPISourceLabel)
+		setLbl(u.lblGDPI, "✔  "+s.DPISourceLabel)
 	} else if s.DPISourceLabel == "Devre Dışı" {
-		setLbl(u.lblGDPI, "— Devre Dışı")
+		setLbl(u.lblGDPI, "—  Devre Dışı")
 	} else {
-		setLbl(u.lblGDPI, "— "+s.DPISourceLabel)
+		setLbl(u.lblGDPI, "—  "+s.DPISourceLabel)
 	}
 
 	if s.DNSMode != "" && s.DNSMode != "unchanged" {
-		setLbl(u.lblDNSSvc, "✔ "+s.DNSName)
+		setLbl(u.lblDNSSvc, "✔  "+s.DNSName)
 	} else {
-		setLbl(u.lblDNSSvc, "— Değiştirilmedi")
+		setLbl(u.lblDNSSvc, "—  Değiştirilmedi")
 	}
 
 	if s.SetSysProxy {
 		if s.Running {
-			setLbl(u.lblSysProxy, "✔ Aktif")
+			setLbl(u.lblSysProxy, "✔  Aktif")
 		} else {
-			setLbl(u.lblSysProxy, "✘ Pasif")
+			setLbl(u.lblSysProxy, "✘  Pasif")
 		}
 	} else {
-		setLbl(u.lblSysProxy, "— Devre dışı")
+		setLbl(u.lblSysProxy, "—  Devre dışı")
 	}
 
 	setLbl(u.lblIP, s.LocalIP)
@@ -1255,17 +1190,15 @@ func (u *appUI) refreshStatus() {
 	setLbl(u.lblDNSMode, s.DNSName)
 
 	if u.lblStatusBar != nil {
-		proxyStr := "✘"
-		pacStr := "✘"
+		proxyStr, pacStr := "✘", "✘"
 		if s.Running {
-			proxyStr = "✔"
-			pacStr = "✔"
+			proxyStr, pacStr = "✔", "✔"
 		}
 		dpiStr := s.DPISourceLabel
 		if dpiStr == "" {
 			dpiStr = "—"
 		}
-		u.lblStatusBar.SetText(fmt.Sprintf("Proxy: %s  PAC: %s  DPI: %s  QR: ✔", proxyStr, pacStr, dpiStr))
+		u.lblStatusBar.SetText(fmt.Sprintf("Proxy: %s  PAC: %s  DPI: %s", proxyStr, pacStr, dpiStr))
 	}
 
 	u.refreshLogs()
@@ -1333,6 +1266,7 @@ func (u *appUI) loadSettingsForm() {
 
 	u.chkSysProxy.SetChecked(c.SetSystemProxy)
 	u.chkAutoStart.SetChecked(startupEnabled())
+
 	switch c.DPISource {
 	case "service":
 		if u.rbDPIService != nil {
