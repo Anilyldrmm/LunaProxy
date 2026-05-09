@@ -89,9 +89,12 @@ type appUI struct {
 	cbDNS         *walk.ComboBox
 	chkSysProxy   *walk.CheckBox
 	chkAutoStart  *walk.CheckBox
-	chkManageGDPI *walk.CheckBox
+	rbDPIAuto     *walk.RadioButton
+	rbDPIService  *walk.RadioButton
+	rbDPIManual   *walk.RadioButton
+	rbDPIDisabled *walk.RadioButton
+	gdpiPathComp  *walk.Composite
 	leGDPIPath    *walk.LineEdit
-	gdpiSection   *walk.Composite
 	neProxyPort   *walk.NumberEdit
 	nePACPort     *walk.NumberEdit
 	lblSaveStatus *walk.Label
@@ -382,22 +385,38 @@ func (u *appUI) settingsPage() Widget {
 				},
 			},
 			GroupBox{
-				Title:  "GoodbyeDPI",
-				Layout: VBox{},
+				Title:  "DPI Kaynağı",
+				Layout: VBox{Spacing: 4},
 				Children: []Widget{
-					CheckBox{
-						AssignTo:  &u.chkManageGDPI,
-						Text:      "SpAC3DPI tarafından yönetilsin",
-						OnClicked: u.onManageGDPIChange,
+					RadioButton{
+						AssignTo: &u.rbDPIAuto,
+						Text:     "Otomatik (önerilen) — Servis → Proses → Manuel → Bundle",
+						Value:    "auto",
+					},
+					RadioButton{
+						AssignTo: &u.rbDPIService,
+						Text:     "Sistem Servisi — Sadece Windows servisi kullanılır",
+						Value:    "service",
+					},
+					RadioButton{
+						AssignTo:  &u.rbDPIManual,
+						Text:      "Manuel Yol — Aşağıdaki goodbyedpi.exe başlatılır",
+						Value:     "manual",
+						OnClicked: u.onDPISourceChange,
 					},
 					Composite{
-						AssignTo: &u.gdpiSection,
+						AssignTo: &u.gdpiPathComp,
 						Visible:  false,
-						Layout:   HBox{MarginsZero: true},
+						Layout:   HBox{MarginsZero: true, Spacing: 4},
 						Children: []Widget{
 							LineEdit{AssignTo: &u.leGDPIPath, CueBanner: `C:\GoodbyeDPI\goodbyedpi.exe`},
 							PushButton{Text: "Bul", OnClicked: u.onAutoDetectGDPI, MaxSize: Size{Width: 60}},
 						},
+					},
+					RadioButton{
+						AssignTo: &u.rbDPIDisabled,
+						Text:     "Devre Dışı — Sadece Proxy + PAC çalışır",
+						Value:    "disabled",
 					},
 				},
 			},
@@ -655,14 +674,12 @@ func (u *appUI) refreshStatus() {
 		setLbl(u.lblPACSvc, "✘ Durduruldu")
 	}
 
-	if s.GDPIManaged {
-		if s.GDPIRunning {
-			setLbl(u.lblGDPI, "✔ Yönetiliyor")
-		} else {
-			setLbl(u.lblGDPI, "✘ Durdu")
-		}
+	if s.GDPIRunning {
+		setLbl(u.lblGDPI, "✔ "+s.DPISourceLabel)
+	} else if s.DPISourceLabel == "Devre Dışı" {
+		setLbl(u.lblGDPI, "— Devre Dışı")
 	} else {
-		setLbl(u.lblGDPI, "— Harici servis")
+		setLbl(u.lblGDPI, "— "+s.DPISourceLabel)
 	}
 
 	if s.DNSMode != "" && s.DNSMode != "unchanged" {
@@ -762,11 +779,20 @@ func (u *appUI) loadSettingsForm() {
 
 	u.chkSysProxy.SetChecked(c.SetSystemProxy)
 	u.chkAutoStart.SetChecked(startupEnabled())
-	u.chkManageGDPI.SetChecked(c.ManageGDPI)
+	switch c.DPISource {
+	case "service":
+		if u.rbDPIService != nil { u.rbDPIService.SetChecked(true) }
+	case "manual":
+		if u.rbDPIManual != nil { u.rbDPIManual.SetChecked(true) }
+	case "disabled":
+		if u.rbDPIDisabled != nil { u.rbDPIDisabled.SetChecked(true) }
+	default:
+		if u.rbDPIAuto != nil { u.rbDPIAuto.SetChecked(true) }
+	}
 	if u.leGDPIPath != nil {
 		u.leGDPIPath.SetText(c.GDPIPath)
 	}
-	u.onManageGDPIChange()
+	u.onDPISourceChange()
 
 	u.neProxyPort.SetValue(float64(c.ProxyPort))
 	u.nePACPort.SetValue(float64(c.PACPort))
@@ -779,9 +805,10 @@ func (u *appUI) onDPIModeChange() {
 	}
 }
 
-func (u *appUI) onManageGDPIChange() {
-	if u.gdpiSection != nil && u.chkManageGDPI != nil {
-		u.gdpiSection.SetVisible(u.chkManageGDPI.Checked())
+func (u *appUI) onDPISourceChange() {
+	isManual := u.rbDPIManual != nil && u.rbDPIManual.Checked()
+	if u.gdpiPathComp != nil {
+		u.gdpiPathComp.SetVisible(isManual)
 	}
 }
 
@@ -830,6 +857,16 @@ func (u *appUI) onSaveSettings() {
 		customFlags = strings.TrimSpace(u.leCustomFlags.Text())
 	}
 
+	dpiSource := "auto"
+	switch {
+	case u.rbDPIService != nil && u.rbDPIService.Checked():
+		dpiSource = "service"
+	case u.rbDPIManual != nil && u.rbDPIManual.Checked():
+		dpiSource = "manual"
+	case u.rbDPIDisabled != nil && u.rbDPIDisabled.Checked():
+		dpiSource = "disabled"
+	}
+
 	gdpiPath := ""
 	if u.leGDPIPath != nil {
 		gdpiPath = strings.TrimSpace(u.leGDPIPath.Text())
@@ -842,7 +879,7 @@ func (u *appUI) onSaveSettings() {
 		CustomFlags:    customFlags,
 		DNSMode:        dnsMode,
 		SetSystemProxy: u.chkSysProxy != nil && u.chkSysProxy.Checked(),
-		ManageGDPI:     u.chkManageGDPI != nil && u.chkManageGDPI.Checked(),
+		DPISource:      dpiSource,
 		GDPIPath:       gdpiPath,
 		ProxyPort:      int(u.neProxyPort.Value()),
 		PACPort:        int(u.nePACPort.Value()),
@@ -863,17 +900,7 @@ func (u *appUI) onSaveSettings() {
 
 	setStartup(u.chkAutoStart != nil && u.chkAutoStart.Checked())
 
-	if nc.ManageGDPI {
-		go func() {
-			StopWindowsService()
-			if err := gdpi.Restart(nc.GDPIPath, activeGDPIFlags()); err != nil {
-				logError("GoodbyeDPI yeniden başlatılamadı: " + err.Error())
-			}
-		}()
-	} else {
-		gdpi.Stop()
-	}
-
+	// DPI kaynağı değişti — çalışıyorsa restart uygulansın
 	if g.running {
 		go g.restart()
 	}
