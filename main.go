@@ -34,10 +34,12 @@ type app struct {
 
 var g *app
 
+// appExiting — tray "Çıkış" tıklandığında true; Closing handler gerçek kapanmaya izin verir.
+var appExiting bool
+
 func main() {
 	if !ensureSingleInstance() {
-		theUI.mw.Synchronize(theUI.showWindow)
-		return
+		return // başka örnek zaten çalışıyor — sessizce çık
 	}
 
 	SentinelCheck()

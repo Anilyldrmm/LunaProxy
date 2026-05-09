@@ -99,7 +99,7 @@ func ResolveDPI(c Config) (DPILaunchResult, error) {
 // hiddenOutput — komutu gizli pencere ile çalıştırır, stdout döner.
 func hiddenOutput(name string, args ...string) (string, error) {
 	cmd := exec.Command(name, args...)
-	cmd.SysProcAttr = &syscall.SysProcAttr{HideWindow: true}
+	cmd.SysProcAttr = &syscall.SysProcAttr{HideWindow: true, CreationFlags: 0x08000000}
 	out, err := cmd.Output()
 	return string(out), err
 }
