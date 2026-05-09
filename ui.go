@@ -57,7 +57,9 @@ type appUI struct {
 	heroPanel *walk.Composite
 
 	// Hero — her zaman görünür
-	btnToggle    *walk.PushButton
+	btnPanel  *walk.Composite // mavi custom buton
+	lblToggle *walk.Label     // buton içi metin
+	lblIPInfo *walk.Label     // IP:Port bilgisi
 	lblStatus    *walk.Label
 	lblUptime    *walk.Label
 	lblActive    *walk.Label
@@ -186,7 +188,7 @@ func runUI() {
 func (u *appUI) heroSection() Widget {
 	return Composite{
 		AssignTo: &u.heroPanel,
-		Layout:   VBox{Margins: Margins{Left: 24, Right: 24, Top: 18, Bottom: 16}, Spacing: 14},
+		Layout:   VBox{Margins: Margins{Left: 28, Right: 28, Top: 22, Bottom: 18}, Spacing: 10},
 		Children: []Widget{
 			// Başlık satırı
 			Composite{
@@ -200,36 +202,68 @@ func (u *appUI) heroSection() Widget {
 					Label{
 						Text:      "DPI Bypass Proxy",
 						Font:      Font{PointSize: 9},
+						TextColor: walk.RGB(100, 100, 125),
+					},
+					HSpacer{},
+				},
+			},
+			// Büyük merkezi durum göstergesi
+			Composite{
+				Layout: HBox{MarginsZero: true},
+				Children: []Widget{
+					HSpacer{},
+					Label{
+						AssignTo:  &u.lblStatus,
+						Text:      "● BAĞLI DEĞİL",
+						Font:      Font{Bold: true, PointSize: 22},
+						TextColor: walk.RGB(220, 75, 75),
+					},
+					HSpacer{},
+				},
+			},
+			// IP:Port bilgisi (çalışınca görünür)
+			Composite{
+				Layout: HBox{MarginsZero: true},
+				Children: []Widget{
+					HSpacer{},
+					Label{
+						AssignTo:  &u.lblIPInfo,
+						Text:      "—",
+						Font:      Font{PointSize: 9},
 						TextColor: walk.RGB(120, 120, 145),
 					},
 					HSpacer{},
 				},
 			},
-			// Durum + mini istatistikler
+			// Mini istatistikler (ortada)
 			Composite{
-				Layout: HBox{MarginsZero: true, Spacing: 28},
+				Layout: HBox{MarginsZero: true, Spacing: 32},
 				Children: []Widget{
-					Label{
-						AssignTo:  &u.lblStatus,
-						Text:      "● BAĞLI DEĞİL",
-						Font:      Font{Bold: true, PointSize: 16},
-						TextColor: walk.RGB(220, 75, 75),
-					},
 					HSpacer{},
 					u.miniStat(&u.lblUptime, "SÜRE"),
 					u.miniStat(&u.lblActive, "BAĞ"),
 					u.miniStat(&u.lblBytes, "VERİ"),
+					HSpacer{},
 				},
 			},
-			// Tam genişlik toggle butonu
-			PushButton{
-				AssignTo:  &u.btnToggle,
-				Text:      "▶  BAŞLAT",
-				OnClicked: u.onToggle,
-				MinSize:   Size{Height: 42},
-				Font:      Font{Bold: true, PointSize: 10},
+			// Mavi custom buton (Composite tabanlı — Windows theming bypass)
+			Composite{
+				AssignTo: &u.btnPanel,
+				Layout:   HBox{MarginsZero: true},
+				MinSize:  Size{Height: 52},
+				Children: []Widget{
+					HSpacer{},
+					Label{
+						AssignTo:  &u.lblToggle,
+						Text:      "▶  BAŞLAT",
+						Font:      Font{Bold: true, PointSize: 11},
+						TextColor: walk.RGB(255, 255, 255),
+						Alignment: AlignHCenterVCenter,
+					},
+					HSpacer{},
+				},
 			},
-			// Status satırı
+			// Status bar
 			Label{
 				AssignTo:  &u.lblStatusBar,
 				Text:      "Proxy: —  PAC: —  DPI: —  QR: —",
@@ -268,10 +302,16 @@ func (u *appUI) applyDarkHero() {
 		return
 	}
 	u.heroPanel.SetBackground(bg)
-	if u.btnToggle != nil {
+	// Mavi buton arka planı (Composite üzerinde çalışır, PushButton'ın aksine)
+	if u.btnPanel != nil {
 		if btnBg, err := walk.NewSolidColorBrush(walk.RGB(78, 154, 241)); err == nil {
-			u.btnToggle.SetBackground(btnBg)
+			u.btnPanel.SetBackground(btnBg)
 		}
+		u.btnPanel.MouseDown().Attach(func(x, y int, button walk.MouseButton) {
+			if button == walk.LeftButton {
+				u.mw.Synchronize(u.onToggle)
+			}
+		})
 	}
 }
 
@@ -671,11 +711,18 @@ func (u *appUI) refreshStatus() {
 	}
 
 	// Toggle butonu metni
-	if u.btnToggle != nil {
+	if u.lblToggle != nil {
 		if s.Running {
-			u.btnToggle.SetText("■  DURDUR")
+			u.lblToggle.SetText("■  DURDUR")
 		} else {
-			u.btnToggle.SetText("▶  BAŞLAT")
+			u.lblToggle.SetText("▶  BAŞLAT")
+		}
+	}
+	if u.lblIPInfo != nil {
+		if s.Running && s.LocalIP != "" {
+			u.lblIPInfo.SetText(fmt.Sprintf("%s:%d", s.LocalIP, s.ProxyPort))
+		} else {
+			u.lblIPInfo.SetText("—")
 		}
 	}
 
