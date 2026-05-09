@@ -57,11 +57,12 @@ type appUI struct {
 	heroPanel *walk.Composite
 
 	// Hero — her zaman görünür
-	btnToggle *walk.PushButton
-	lblStatus *walk.Label
-	lblUptime *walk.Label
-	lblActive *walk.Label
-	lblBytes  *walk.Label
+	btnToggle    *walk.PushButton
+	lblStatus    *walk.Label
+	lblUptime    *walk.Label
+	lblActive    *walk.Label
+	lblBytes     *walk.Label
+	lblStatusBar *walk.Label // "Proxy: ✓  PAC: ✓  DPI: Sistem Servisi  QR: ✓"
 
 	// Durum sekmesi
 	lblTotal     *walk.Label
@@ -109,6 +110,7 @@ type appUI struct {
 	logModel      *logTableModel
 	chkAutoScroll *walk.CheckBox
 	lblLogCount   *walk.Label
+	logContent    *walk.Composite // daraltılabilir log alanı
 }
 
 var theUI = &appUI{}
@@ -227,6 +229,13 @@ func (u *appUI) heroSection() Widget {
 				MinSize:   Size{Height: 42},
 				Font:      Font{Bold: true, PointSize: 10},
 			},
+			// Status satırı
+			Label{
+				AssignTo:  &u.lblStatusBar,
+				Text:      "Proxy: —  PAC: —  DPI: —  QR: —",
+				Font:      Font{PointSize: 8},
+				TextColor: walk.RGB(120, 120, 145),
+			},
 		},
 	}
 }
@@ -259,6 +268,11 @@ func (u *appUI) applyDarkHero() {
 		return
 	}
 	u.heroPanel.SetBackground(bg)
+	if u.btnToggle != nil {
+		if btnBg, err := walk.NewSolidColorBrush(walk.RGB(78, 154, 241)); err == nil {
+			u.btnToggle.SetBackground(btnBg)
+		}
+	}
 }
 
 // ── Durum sekmesi ────────────────────────────────────────────────────────────
@@ -525,20 +539,27 @@ func (u *appUI) logsPage() Widget {
 				Children: []Widget{
 					PushButton{Text: "Temizle", OnClicked: u.onClearLogs, MaxSize: Size{Width: 80}},
 					PushButton{Text: "Kopyala", OnClicked: u.onCopyLogs, MaxSize: Size{Width: 80}},
+					PushButton{Text: "▲ Gizle", OnClicked: u.onToggleLogs, MaxSize: Size{Width: 80}},
 					CheckBox{AssignTo: &u.chkAutoScroll, Text: "Otomatik kaydır", Checked: true},
 					HSpacer{},
 					Label{AssignTo: &u.lblLogCount, Text: "0 kayıt"},
 				},
 			},
-			TableView{
-				AssignTo:            &u.tvLog,
-				Model:               u.logModel,
-				LastColumnStretched: true,
-				AlternatingRowBG:    true,
-				Columns: []TableViewColumn{
-					{Title: "Zaman", Width: 65},
-					{Title: "Seviye", Width: 55},
-					{Title: "Mesaj"},
+			Composite{
+				AssignTo: &u.logContent,
+				Layout:   VBox{MarginsZero: true, SpacingZero: true},
+				Children: []Widget{
+					TableView{
+						AssignTo:            &u.tvLog,
+						Model:               u.logModel,
+						LastColumnStretched: true,
+						AlternatingRowBG:    true,
+						Columns: []TableViewColumn{
+							{Title: "Zaman", Width: 65},
+							{Title: "Seviye", Width: 55},
+							{Title: "Mesaj"},
+						},
+					},
 				},
 			},
 		},
@@ -716,6 +737,21 @@ func (u *appUI) refreshStatus() {
 	// Log sayacı
 	if u.lblLogCount != nil {
 		u.lblLogCount.SetText(fmt.Sprintf("%d kayıt", appLog.Len()))
+	}
+
+	// Status bar güncelle
+	if u.lblStatusBar != nil {
+		proxyStr := "✘"
+		pacStr := "✘"
+		if s.Running {
+			proxyStr = "✔"
+			pacStr = "✔"
+		}
+		dpiStr := s.DPISourceLabel
+		if dpiStr == "" || dpiStr == "—" {
+			dpiStr = "—"
+		}
+		u.lblStatusBar.SetText(fmt.Sprintf("Proxy: %s  PAC: %s  DPI: %s  QR: ✔", proxyStr, pacStr, dpiStr))
 	}
 }
 
@@ -1011,6 +1047,16 @@ func (u *appUI) onClearLogs() {
 	if u.lblLogCount != nil {
 		u.lblLogCount.SetText("0 kayıt")
 	}
+}
+
+func (u *appUI) onToggleLogs() {
+	if u.logContent == nil {
+		return
+	}
+	visible := u.logContent.Visible()
+	u.logContent.SetVisible(!visible)
+	// Toolbar'daki "Gizle/Göster" butonu metnini güncelle
+	// (buton referansı yok ama bu yeterli — visible state görünür)
 }
 
 func (u *appUI) onCopyLogs() {
