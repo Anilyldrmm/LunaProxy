@@ -150,10 +150,10 @@ func (a *app) stop() {
 
 	// 1. PAC'ı önce DIRECT yap — iOS yeni PAC'ı hemen çekebilsin.
 	setPACDirect()
-	go pushRouterPAC(a.localIP, "direct", 0)
 
 	// 2. Durumu hemen stopped'a al — watchdog ve UI güncellenir.
 	proxySrv := a.proxySrv
+	localIP := a.localIP
 	a.proxySrv = nil
 	a.running = false
 
@@ -171,10 +171,13 @@ func (a *app) stop() {
 
 	a.mu.Unlock()
 
-	// 3. Proxy'yi 3 saniye sonra kapat — iOS PAC geçişi için bekleme süresi.
-	// Bu sürede PAC zaten DIRECT; telefon yeni PAC'ı çeker, proxy kapanınca sorunsuz geçiş yapar.
+	// 3. Router PAC'ı senkron güncelle, ardından proxy'yi kapat.
+	// pushRouterPAC önce tamamlanır (max ~6s), sonra 5s daha bekle → iOS yeni PAC'ı çeker.
+	// Toplam ~11s proxy ayakta kalır; bu sürede eski cached PAC kullanan iOS
+	// bağlantılarını sürdürür, yeni PAC çekince DIRECT'e geçer.
 	go func() {
-		time.Sleep(3 * time.Second)
+		pushRouterPAC(localIP, "direct", 0)
+		time.Sleep(5 * time.Second)
 		if proxySrv != nil {
 			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 			defer cancel()
