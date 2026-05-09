@@ -389,14 +389,16 @@ func (u *appUI) settingsPage() Widget {
 				Layout: VBox{Spacing: 4},
 				Children: []Widget{
 					RadioButton{
-						AssignTo: &u.rbDPIAuto,
-						Text:     "Otomatik (önerilen) — Servis → Proses → Manuel → Bundle",
-						Value:    "auto",
+						AssignTo:  &u.rbDPIAuto,
+						Text:      "Otomatik (önerilen) — Servis → Proses → Manuel → Bundle",
+						Value:     "auto",
+						OnClicked: u.onDPISourceChange,
 					},
 					RadioButton{
-						AssignTo: &u.rbDPIService,
-						Text:     "Sistem Servisi — Sadece Windows servisi kullanılır",
-						Value:    "service",
+						AssignTo:  &u.rbDPIService,
+						Text:      "Sistem Servisi — Sadece Windows servisi kullanılır",
+						Value:     "service",
+						OnClicked: u.onDPISourceChange,
 					},
 					RadioButton{
 						AssignTo:  &u.rbDPIManual,
@@ -414,9 +416,10 @@ func (u *appUI) settingsPage() Widget {
 						},
 					},
 					RadioButton{
-						AssignTo: &u.rbDPIDisabled,
-						Text:     "Devre Dışı — Sadece Proxy + PAC çalışır",
-						Value:    "disabled",
+						AssignTo:  &u.rbDPIDisabled,
+						Text:      "Devre Dışı — Sadece Proxy + PAC çalışır",
+						Value:     "disabled",
+						OnClicked: u.onDPISourceChange,
 					},
 				},
 			},
