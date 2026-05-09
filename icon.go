@@ -271,7 +271,7 @@ func loadLogoBitmap(active bool) *walk.Bitmap {
 	if !active {
 		src = dimLogo(src)
 	}
-	resized := resizeLogo(src, 52)
+	resized := resizeLogo(src, 72)
 	var buf bytes.Buffer
 	png.Encode(&buf, resized)
 	name := "logo_off.png"
