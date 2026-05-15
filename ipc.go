@@ -155,7 +155,7 @@ func handleIPCMessage(data string) {
 		gateway := guessGatewayIP(g.localIP)
 		data, _ := json.Marshal(map[string]string{
 			"host":    gateway,
-			"user":    "root",
+			"user":    "admin",
 			"port":    "22",
 			"pacPort": fmt.Sprintf("%d", c.PACPort),
 		})
