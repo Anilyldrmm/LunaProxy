@@ -139,6 +139,17 @@ func handleIPCMessage(data string) {
 			}
 		}()
 
+	case "setTheme":
+		var p struct {
+			Theme string `json:"theme"`
+		}
+		json.Unmarshal(msg.Payload, &p) //nolint:errcheck
+		if p.Theme == "neutral" || p.Theme == "purple" {
+			c := getConfig()
+			c.Theme = p.Theme
+			setConfig(c) //nolint:errcheck
+		}
+
 	case "requestRouterDefaults":
 		c := getConfig()
 		gateway := guessGatewayIP(g.localIP)

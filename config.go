@@ -1,4 +1,4 @@
-package main
+﻿package main
 
 import (
 	"encoding/json"
@@ -33,6 +33,9 @@ type Config struct {
 	// Başlangıç
 	AutoStart      bool `json:"auto_start"`       // Windows startup kaydı
 	ProxyAutoStart bool `json:"proxy_auto_start"` // App açılınca proxy'yi otomatik başlat
+
+	// UI
+	Theme string `json:"theme"` // "neutral" | "purple"
 }
 
 // ── DPI Modları ───────────────────────────────────────────────────────────────
@@ -93,7 +96,7 @@ func configFilePath() string {
 	if err != nil {
 		dir = "."
 	}
-	return filepath.Join(dir, "SpAC3DPI", "config.json")
+	return filepath.Join(dir, "LunaProxy", "config.json")
 }
 
 func loadConfig() {
