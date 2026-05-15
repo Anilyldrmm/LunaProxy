@@ -120,11 +120,13 @@ func (w *Watchdog) check() {
 	}
 	conn.Close()
 
-	// 2. GoodbyeDPI yönetiliyorsa çalışıyor mu?
-	if c.ManageGDPI && !gdpi.IsRunning() {
+	// 2. Bizim başlattığımız DPI prosesi durduysa yeniden başlat (servis/harici prosese dokunma)
+	if !gdpi.IsRunning() && (g.dpiSource == "manual" || g.dpiSource == "bundle") {
 		logWarn("Watchdog: GoodbyeDPI durmuş → yeniden başlatılıyor")
-		if err := gdpi.Start(c.GDPIPath, activeGDPIFlags()); err != nil {
-			logError("GoodbyeDPI yeniden başlatılamadı: " + err.Error())
+		if result, err := ResolveDPI(c); err == nil && result.ExePath != "" {
+			if err := gdpi.Start(result.ExePath, activeGDPIFlags()); err != nil {
+				logError("GoodbyeDPI yeniden başlatılamadı: " + err.Error())
+			}
 		}
 	}
 }

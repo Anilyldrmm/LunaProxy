@@ -1,0 +1,908 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="UTF-8">
+<title>SpAC3DPI — UI Preview</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    background: #1a1a2e;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    min-height: 100vh;
+    font-family: 'Segoe UI', system-ui, sans-serif;
+    gap: 40px;
+    flex-wrap: wrap;
+    padding: 40px;
+  }
+
+  /* ── CSS Variables ─────────────────────── */
+  :root {
+    --bg:           #0f0f1a;
+    --sidebar:      #0a0a14;
+    --card:         #1a1a2e;
+    --card2:        #161628;
+    --accent:       #7c3aed;
+    --accent-hover: #9d5bff;
+    --btn-stop:     #dc4b4b;
+    --btn-stop-h:   #e06060;
+    --green:        #48c774;
+    --red:          #dc4b4b;
+    --text:         #e0d0ff;
+    --sub:          #6a5a8a;
+    --border:       #2a2a40;
+  }
+
+  /* ── App Window Shell ─────────────────── */
+  .app-window {
+    width: 380px;
+    height: 600px;
+    background: var(--bg);
+    border-radius: 12px;
+    box-shadow: 0 32px 80px rgba(0,0,0,0.8), 0 0 0 1px rgba(124,58,237,0.15);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    position: relative;
+  }
+
+  /* ── Header / Title Bar ───────────────── */
+  .titlebar {
+    height: 48px;
+    background: #0a0a14;
+    display: flex;
+    align-items: center;
+    padding: 0 14px 0 12px;
+    gap: 8px;
+    flex-shrink: 0;
+    border-bottom: 1px solid var(--border);
+    cursor: default;
+    user-select: none;
+  }
+
+  .titlebar-logo {
+    width: 26px;
+    height: 26px;
+    background: var(--accent);
+    border-radius: 6px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 900;
+    font-size: 14px;
+    color: #fff;
+    flex-shrink: 0;
+  }
+
+  .titlebar-name {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text);
+  }
+
+  .titlebar-sub {
+    font-size: 11px;
+    color: var(--sub);
+  }
+
+  .titlebar-spacer { flex: 1; }
+
+  .titlebar-btns {
+    display: flex;
+    gap: 6px;
+  }
+
+  .titlebar-btn {
+    width: 28px;
+    height: 28px;
+    border-radius: 6px;
+    border: none;
+    background: transparent;
+    color: var(--sub);
+    font-size: 14px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background 0.15s, color 0.15s;
+  }
+  .titlebar-btn:hover { background: rgba(255,255,255,0.08); color: var(--text); }
+  .titlebar-btn.close:hover { background: var(--btn-stop); color: #fff; }
+
+  /* ── Body (sidebar + content) ─────────── */
+  .app-body {
+    display: flex;
+    flex: 1;
+    overflow: hidden;
+  }
+
+  /* ── Sidebar ──────────────────────────── */
+  .sidebar {
+    width: 60px;
+    background: var(--sidebar);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 12px 0;
+    gap: 4px;
+    border-right: 1px solid var(--border);
+    flex-shrink: 0;
+  }
+
+  .nav-btn {
+    width: 44px;
+    height: 44px;
+    border-radius: 10px;
+    background: transparent;
+    border: none;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--sub);
+    transition: background 0.15s, color 0.15s;
+    position: relative;
+  }
+  .nav-btn:hover { color: var(--accent-hover); background: rgba(124,58,237,0.1); }
+  .nav-btn.active {
+    color: var(--text);
+    background: rgba(124,58,237,0.22);
+  }
+  .nav-btn.active::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 3px;
+    height: 20px;
+    background: var(--accent);
+    border-radius: 0 3px 3px 0;
+  }
+
+  .nav-btn svg { width: 20px; height: 20px; }
+
+  /* ── Content Panel ────────────────────── */
+  .content {
+    flex: 1;
+    overflow-y: auto;
+    overflow-x: hidden;
+  }
+  .content::-webkit-scrollbar { width: 4px; }
+  .content::-webkit-scrollbar-track { background: transparent; }
+  .content::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+  /* ── Panel ────────────────────────────── */
+  .panel { display: none; padding: 20px; height: 100%; }
+  .panel.active { display: block; }
+
+  /* ── Status Panel ─────────────────────── */
+  .status-logo-area {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 16px 0 12px;
+    gap: 4px;
+  }
+
+  .logo-img {
+    width: 72px;
+    height: 72px;
+    border-radius: 16px;
+    background: linear-gradient(135deg, #5b21b6, #7c3aed);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 38px;
+    font-weight: 900;
+    color: #fff;
+    box-shadow: 0 8px 24px rgba(124,58,237,0.35);
+    transition: filter 0.3s;
+  }
+  .logo-img.dim { filter: grayscale(100%); box-shadow: none; }
+
+  .app-title {
+    font-size: 17px;
+    font-weight: 700;
+    color: var(--text);
+    margin-top: 6px;
+  }
+  .app-subtitle {
+    font-size: 11px;
+    color: var(--sub);
+  }
+
+  .status-indicator {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    margin: 14px 0 6px;
+    gap: 4px;
+  }
+  .status-text {
+    font-size: 20px;
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .status-dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    flex-shrink: 0;
+  }
+  .status-dot.green { background: var(--green); box-shadow: 0 0 8px var(--green); }
+  .status-dot.red   { background: var(--red);   box-shadow: 0 0 8px var(--red); }
+
+  .status-connected .status-text { color: var(--green); }
+  .status-disconnected .status-text { color: var(--red); }
+
+  .ip-line {
+    font-size: 12px;
+    color: var(--sub);
+    font-family: 'Consolas', monospace;
+  }
+
+  .toggle-btn {
+    width: 100%;
+    height: 48px;
+    border-radius: 50px;
+    border: none;
+    cursor: pointer;
+    font-size: 14px;
+    font-weight: 700;
+    color: #fff;
+    letter-spacing: 1.5px;
+    margin: 14px 0;
+    transition: background 0.2s, transform 0.1s, box-shadow 0.2s;
+  }
+  .toggle-btn.start {
+    background: var(--accent);
+    box-shadow: 0 4px 20px rgba(124,58,237,0.4);
+  }
+  .toggle-btn.start:hover {
+    background: var(--accent-hover);
+    box-shadow: 0 4px 24px rgba(157,91,255,0.5);
+    transform: translateY(-1px);
+  }
+  .toggle-btn.stop {
+    background: var(--btn-stop);
+    box-shadow: 0 4px 20px rgba(220,75,75,0.35);
+  }
+  .toggle-btn.stop:hover {
+    background: var(--btn-stop-h);
+    transform: translateY(-1px);
+  }
+
+  .stats-row {
+    display: flex;
+    justify-content: space-around;
+    margin: 4px 0 16px;
+  }
+  .stat-item {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 2px;
+  }
+  .stat-value {
+    font-size: 16px;
+    font-weight: 700;
+    color: var(--text);
+    font-family: 'Consolas', monospace;
+  }
+  .stat-label {
+    font-size: 10px;
+    color: var(--sub);
+    letter-spacing: 1px;
+    text-transform: uppercase;
+  }
+
+  .status-bar {
+    border-top: 1px solid var(--border);
+    padding-top: 12px;
+    font-size: 11px;
+    color: var(--sub);
+    display: flex;
+    gap: 12px;
+    flex-wrap: wrap;
+  }
+  .sb-item { display: flex; align-items: center; gap: 4px; }
+  .sb-ok { color: var(--green); }
+  .sb-no { color: var(--red); }
+
+  /* ── Settings Panel ───────────────────── */
+  .settings-panel { display: flex; flex-direction: column; gap: 10px; }
+
+  .card {
+    background: var(--card);
+    border-radius: 10px;
+    padding: 14px;
+    border: 1px solid var(--border);
+  }
+  .card-title {
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--sub);
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    margin-bottom: 10px;
+  }
+
+  .radio-group { display: flex; gap: 6px; flex-wrap: wrap; }
+  .radio-pill {
+    padding: 5px 12px;
+    border-radius: 50px;
+    border: 1px solid var(--border);
+    font-size: 12px;
+    color: var(--sub);
+    cursor: pointer;
+    background: transparent;
+    transition: all 0.15s;
+  }
+  .radio-pill.active, .radio-pill:hover {
+    border-color: var(--accent);
+    color: var(--text);
+    background: rgba(124,58,237,0.15);
+  }
+
+  .settings-select {
+    width: 100%;
+    background: #0a0a14;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 7px 10px;
+    color: var(--text);
+    font-size: 13px;
+    font-family: 'Segoe UI', sans-serif;
+    outline: none;
+    cursor: pointer;
+  }
+  .settings-select:focus { border-color: var(--accent); }
+
+  .toggle-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 6px 0;
+  }
+  .toggle-label { font-size: 13px; color: var(--text); }
+
+  .toggle-switch {
+    width: 40px;
+    height: 22px;
+    background: var(--border);
+    border-radius: 50px;
+    position: relative;
+    cursor: pointer;
+    transition: background 0.2s;
+    flex-shrink: 0;
+  }
+  .toggle-switch.on { background: var(--accent); }
+  .toggle-switch::after {
+    content: '';
+    position: absolute;
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    background: #fff;
+    top: 3px;
+    left: 3px;
+    transition: transform 0.2s;
+  }
+  .toggle-switch.on::after { transform: translateX(18px); }
+
+  .port-row { display: flex; gap: 10px; align-items: center; }
+  .port-label { font-size: 12px; color: var(--sub); }
+  .port-input {
+    width: 70px;
+    background: #0a0a14;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 6px 8px;
+    color: var(--text);
+    font-size: 13px;
+    font-family: monospace;
+    outline: none;
+  }
+  .port-input:focus { border-color: var(--accent); }
+
+  .save-btn {
+    width: 100%;
+    height: 42px;
+    border-radius: 8px;
+    border: none;
+    background: var(--accent);
+    color: #fff;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background 0.15s;
+    margin-top: 4px;
+  }
+  .save-btn:hover { background: var(--accent-hover); }
+
+  /* ── Mobile Panel ─────────────────────── */
+  .mobile-panel { display: flex; flex-direction: column; gap: 12px; }
+
+  .url-row {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+  .url-label { font-size: 11px; color: var(--sub); font-weight: 600; text-transform: uppercase; letter-spacing: 1px; }
+  .url-field {
+    display: flex;
+    gap: 6px;
+  }
+  .url-input {
+    flex: 1;
+    background: #0a0a14;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 7px 10px;
+    color: var(--text);
+    font-size: 11px;
+    font-family: monospace;
+    outline: none;
+  }
+  .copy-btn {
+    padding: 7px 12px;
+    border-radius: 6px;
+    border: 1px solid var(--accent);
+    background: rgba(124,58,237,0.1);
+    color: var(--accent);
+    font-size: 11px;
+    cursor: pointer;
+    transition: all 0.15s;
+    white-space: nowrap;
+  }
+  .copy-btn:hover { background: var(--accent); color: #fff; }
+
+  .qr-container {
+    display: flex;
+    justify-content: center;
+    padding: 8px 0;
+  }
+  .qr-box {
+    width: 140px;
+    height: 140px;
+    background: #fff;
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 11px;
+    color: #333;
+    flex-direction: column;
+    gap: 4px;
+  }
+  .qr-grid {
+    display: grid;
+    grid-template-columns: repeat(7,14px);
+    grid-template-rows: repeat(7,14px);
+    gap: 1px;
+  }
+  .qr-cell { border-radius: 2px; }
+
+  .guide-cards { display: flex; gap: 6px; }
+  .guide-card {
+    flex: 1;
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 10px 8px;
+  }
+  .guide-title {
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--accent);
+    margin-bottom: 6px;
+  }
+  .guide-step {
+    font-size: 10px;
+    color: var(--sub);
+    line-height: 1.6;
+  }
+
+  /* ── Logs Panel ───────────────────────── */
+  .logs-header {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-bottom: 10px;
+    flex-wrap: wrap;
+  }
+  .log-action-btn {
+    padding: 5px 10px;
+    border-radius: 6px;
+    border: 1px solid var(--border);
+    background: transparent;
+    color: var(--sub);
+    font-size: 11px;
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+  .log-action-btn:hover { border-color: var(--accent); color: var(--text); }
+  .log-count { font-size: 11px; color: var(--sub); margin-left: auto; }
+
+  .log-area {
+    background: #080810;
+    border-radius: 8px;
+    border: 1px solid var(--border);
+    padding: 10px;
+    height: 380px;
+    overflow-y: auto;
+    font-family: 'Consolas', monospace;
+    font-size: 11px;
+    line-height: 1.7;
+  }
+  .log-area::-webkit-scrollbar { width: 4px; }
+  .log-area::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+  .log-entry { display: flex; gap: 8px; }
+  .log-time { color: #4a4a6a; flex-shrink: 0; }
+  .log-level { flex-shrink: 0; font-weight: 700; width: 36px; }
+  .log-level.INFO  { color: #7a9fff; }
+  .log-level.WARN  { color: #f0b429; }
+  .log-level.ERROR { color: #dc4b4b; }
+  .log-msg { color: #a090c0; }
+
+  /* ── Preview labels ───────────────────── */
+  .preview-label {
+    text-align: center;
+    color: rgba(255,255,255,0.4);
+    font-size: 12px;
+    margin-top: 10px;
+    font-family: 'Segoe UI', sans-serif;
+  }
+</style>
+</head>
+<body>
+
+<!-- ════════════════════════════════════════════════════════════════
+     WINDOW 1 — STATUS (Durduruldu)
+════════════════════════════════════════════════════════════════ -->
+<div>
+<div class="app-window">
+  <!-- Title Bar -->
+  <div class="titlebar">
+    <div class="titlebar-logo">S</div>
+    <span class="titlebar-name">SpAC3DPI</span>
+    <span class="titlebar-sub">DPI Bypass</span>
+    <div class="titlebar-spacer"></div>
+    <div class="titlebar-btns">
+      <button class="titlebar-btn">─</button>
+      <button class="titlebar-btn close">✕</button>
+    </div>
+  </div>
+
+  <!-- Body -->
+  <div class="app-body">
+    <!-- Sidebar -->
+    <div class="sidebar">
+      <button class="nav-btn active" title="Durum">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <circle cx="12" cy="12" r="10"/><polyline points="12,6 12,12 16,14"/>
+        </svg>
+      </button>
+      <button class="nav-btn" title="Ayarlar">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <circle cx="12" cy="12" r="3"/>
+          <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+        </svg>
+      </button>
+      <button class="nav-btn" title="Mobil">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <rect x="5" y="2" width="14" height="20" rx="2" ry="2"/>
+          <line x1="12" y1="18" x2="12.01" y2="18"/>
+        </svg>
+      </button>
+      <button class="nav-btn" title="Kayıtlar">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+          <polyline points="14,2 14,8 20,8"/>
+          <line x1="16" y1="13" x2="8" y2="13"/>
+          <line x1="16" y1="17" x2="8" y2="17"/>
+        </svg>
+      </button>
+    </div>
+
+    <!-- Content: Status (stopped) -->
+    <div class="content">
+      <div class="panel active">
+        <div class="status-logo-area">
+          <div class="logo-img dim">S</div>
+          <div class="app-title">SpAC3DPI</div>
+          <div class="app-subtitle">DPI Bypass Proxy</div>
+        </div>
+
+        <div class="status-indicator status-disconnected">
+          <div class="status-text">
+            <div class="status-dot red"></div>
+            BAĞLI DEĞİL
+          </div>
+        </div>
+
+        <button class="toggle-btn start">▶&nbsp;&nbsp;&nbsp;BAŞLAT</button>
+
+        <div class="stats-row">
+          <div class="stat-item">
+            <div class="stat-value">—</div>
+            <div class="stat-label">Süre</div>
+          </div>
+          <div class="stat-item">
+            <div class="stat-value">—</div>
+            <div class="stat-label">Bağ</div>
+          </div>
+          <div class="stat-item">
+            <div class="stat-value">—</div>
+            <div class="stat-label">Veri</div>
+          </div>
+        </div>
+
+        <div class="status-bar">
+          <div class="sb-item"><span class="sb-no">✘</span> Proxy</div>
+          <div class="sb-item"><span class="sb-no">✘</span> PAC</div>
+          <div class="sb-item"><span class="sb-no">—</span> DPI</div>
+          <div class="sb-item"><span class="sb-ok">✔</span> QR</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+<div class="preview-label">Durum — Durduruldu</div>
+</div>
+
+<!-- ════════════════════════════════════════════════════════════════
+     WINDOW 2 — STATUS (Bağlı)
+════════════════════════════════════════════════════════════════ -->
+<div>
+<div class="app-window">
+  <div class="titlebar">
+    <div class="titlebar-logo">S</div>
+    <span class="titlebar-name">SpAC3DPI</span>
+    <span class="titlebar-sub">DPI Bypass</span>
+    <div class="titlebar-spacer"></div>
+    <div class="titlebar-btns">
+      <button class="titlebar-btn">─</button>
+      <button class="titlebar-btn close">✕</button>
+    </div>
+  </div>
+  <div class="app-body">
+    <div class="sidebar">
+      <button class="nav-btn active" title="Durum">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <circle cx="12" cy="12" r="10"/><polyline points="12,6 12,12 16,14"/>
+        </svg>
+      </button>
+      <button class="nav-btn" title="Ayarlar">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <circle cx="12" cy="12" r="3"/>
+          <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+        </svg>
+      </button>
+      <button class="nav-btn" title="Mobil">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <rect x="5" y="2" width="14" height="20" rx="2" ry="2"/>
+          <line x1="12" y1="18" x2="12.01" y2="18"/>
+        </svg>
+      </button>
+      <button class="nav-btn" title="Kayıtlar">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+          <polyline points="14,2 14,8 20,8"/>
+          <line x1="16" y1="13" x2="8" y2="13"/>
+          <line x1="16" y1="17" x2="8" y2="17"/>
+        </svg>
+      </button>
+    </div>
+    <div class="content">
+      <div class="panel active">
+        <div class="status-logo-area">
+          <div class="logo-img">S</div>
+          <div class="app-title">SpAC3DPI</div>
+          <div class="app-subtitle">DPI Bypass Proxy</div>
+        </div>
+        <div class="status-indicator status-connected">
+          <div class="status-text">
+            <div class="status-dot green"></div>
+            BAĞLI
+          </div>
+          <div class="ip-line">192.168.1.41 : 8888</div>
+        </div>
+        <button class="toggle-btn stop">■&nbsp;&nbsp;&nbsp;DURDUR</button>
+        <div class="stats-row">
+          <div class="stat-item">
+            <div class="stat-value">04:23</div>
+            <div class="stat-label">Süre</div>
+          </div>
+          <div class="stat-item">
+            <div class="stat-value">3</div>
+            <div class="stat-label">Bağ</div>
+          </div>
+          <div class="stat-item">
+            <div class="stat-value">1.2 MB</div>
+            <div class="stat-label">Veri</div>
+          </div>
+        </div>
+        <div class="status-bar">
+          <div class="sb-item"><span class="sb-ok">✔</span> Proxy</div>
+          <div class="sb-item"><span class="sb-ok">✔</span> PAC</div>
+          <div class="sb-item"><span class="sb-ok">✔</span> DPI: Bundle</div>
+          <div class="sb-item"><span class="sb-ok">✔</span> QR</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+<div class="preview-label">Durum — Bağlı</div>
+</div>
+
+<!-- ════════════════════════════════════════════════════════════════
+     WINDOW 3 — SETTINGS
+════════════════════════════════════════════════════════════════ -->
+<div>
+<div class="app-window">
+  <div class="titlebar">
+    <div class="titlebar-logo">S</div>
+    <span class="titlebar-name">SpAC3DPI</span>
+    <span class="titlebar-sub">DPI Bypass</span>
+    <div class="titlebar-spacer"></div>
+    <div class="titlebar-btns">
+      <button class="titlebar-btn">─</button>
+      <button class="titlebar-btn close">✕</button>
+    </div>
+  </div>
+  <div class="app-body">
+    <div class="sidebar">
+      <button class="nav-btn" title="Durum">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <circle cx="12" cy="12" r="10"/><polyline points="12,6 12,12 16,14"/>
+        </svg>
+      </button>
+      <button class="nav-btn active" title="Ayarlar">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <circle cx="12" cy="12" r="3"/>
+          <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+        </svg>
+      </button>
+      <button class="nav-btn" title="Mobil">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <rect x="5" y="2" width="14" height="20" rx="2" ry="2"/>
+          <line x1="12" y1="18" x2="12.01" y2="18"/>
+        </svg>
+      </button>
+      <button class="nav-btn" title="Kayıtlar">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+          <polyline points="14,2 14,8 20,8"/>
+          <line x1="16" y1="13" x2="8" y2="13"/>
+          <line x1="16" y1="17" x2="8" y2="17"/>
+        </svg>
+      </button>
+    </div>
+    <div class="content" style="padding:16px; display:flex; flex-direction:column; gap:10px;">
+      <div class="card">
+        <div class="card-title">DPI Bypass Modu</div>
+        <div class="radio-group">
+          <button class="radio-pill">⚡ Turbo</button>
+          <button class="radio-pill active">⚖ Dengeli</button>
+          <button class="radio-pill">🔥 Güçlü</button>
+          <button class="radio-pill">🛠 Özel</button>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-title">DNS Şifreleme</div>
+        <select class="settings-select">
+          <option>🔒 Değiştirilmesin</option>
+          <option>☁ Cloudflare (1.1.1.1)</option>
+          <option>🌐 Google (8.8.8.8)</option>
+        </select>
+      </div>
+      <div class="card">
+        <div class="card-title">DPI Kaynağı</div>
+        <div class="radio-group">
+          <button class="radio-pill active">Otomatik</button>
+          <button class="radio-pill">Servis</button>
+          <button class="radio-pill">Manuel</button>
+          <button class="radio-pill">Kapalı</button>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-title">Sistem</div>
+        <div class="toggle-row">
+          <span class="toggle-label">Sistem proxy</span>
+          <div class="toggle-switch on"></div>
+        </div>
+        <div class="toggle-row">
+          <span class="toggle-label">Otomatik başlat</span>
+          <div class="toggle-switch"></div>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-title">Portlar</div>
+        <div class="port-row">
+          <span class="port-label">Proxy</span>
+          <input class="port-input" value="8888" readonly>
+          <span class="port-label">PAC</span>
+          <input class="port-input" value="8080" readonly>
+        </div>
+      </div>
+      <button class="save-btn">💾  Kaydet ve Uygula</button>
+    </div>
+  </div>
+</div>
+<div class="preview-label">Ayarlar</div>
+</div>
+
+<!-- ════════════════════════════════════════════════════════════════
+     WINDOW 4 — LOGS
+════════════════════════════════════════════════════════════════ -->
+<div>
+<div class="app-window">
+  <div class="titlebar">
+    <div class="titlebar-logo">S</div>
+    <span class="titlebar-name">SpAC3DPI</span>
+    <span class="titlebar-sub">DPI Bypass</span>
+    <div class="titlebar-spacer"></div>
+    <div class="titlebar-btns">
+      <button class="titlebar-btn">─</button>
+      <button class="titlebar-btn close">✕</button>
+    </div>
+  </div>
+  <div class="app-body">
+    <div class="sidebar">
+      <button class="nav-btn" title="Durum">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <circle cx="12" cy="12" r="10"/><polyline points="12,6 12,12 16,14"/>
+        </svg>
+      </button>
+      <button class="nav-btn" title="Ayarlar">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <circle cx="12" cy="12" r="3"/>
+          <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+        </svg>
+      </button>
+      <button class="nav-btn" title="Mobil">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <rect x="5" y="2" width="14" height="20" rx="2" ry="2"/>
+          <line x1="12" y1="18" x2="12.01" y2="18"/>
+        </svg>
+      </button>
+      <button class="nav-btn active" title="Kayıtlar">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+          <polyline points="14,2 14,8 20,8"/>
+          <line x1="16" y1="13" x2="8" y2="13"/>
+          <line x1="16" y1="17" x2="8" y2="17"/>
+        </svg>
+      </button>
+    </div>
+    <div class="content" style="padding:16px;">
+      <div class="logs-header">
+        <button class="log-action-btn">Temizle</button>
+        <button class="log-action-btn">Kopyala</button>
+        <span class="log-count">8 kayıt</span>
+      </div>
+      <div class="log-area">
+        <div class="log-entry"><span class="log-time">14:23:01</span><span class="log-level INFO">INFO</span><span class="log-msg">SpAC3DPI başlatıldı</span></div>
+        <div class="log-entry"><span class="log-time">14:23:01</span><span class="log-level INFO">INFO</span><span class="log-msg">Proxy :8888 dinleniyor</span></div>
+        <div class="log-entry"><span class="log-time">14:23:01</span><span class="log-level INFO">INFO</span><span class="log-msg">PAC :8080 başlatıldı</span></div>
+        <div class="log-entry"><span class="log-time">14:23:02</span><span class="log-level INFO">INFO</span><span class="log-msg">GoodbyeDPI: bundle kaynağı</span></div>
+        <div class="log-entry"><span class="log-time">14:23:02</span><span class="log-level WARN">WARN</span><span class="log-msg">DNS uygulanamadı: erişim reddedildi</span></div>
+        <div class="log-entry"><span class="log-time">14:23:05</span><span class="log-level INFO">INFO</span><span class="log-msg">Router PAC güncellendi</span></div>
+        <div class="log-entry"><span class="log-time">14:23:10</span><span class="log-level ERROR">ERROR</span><span class="log-msg">Watchdog: proxy yanıt vermiyor</span></div>
+        <div class="log-entry"><span class="log-time">14:23:10</span><span class="log-level INFO">INFO</span><span class="log-msg">Watchdog yeniden başlattı</span></div>
+      </div>
+    </div>
+  </div>
+</div>
+<div class="preview-label">Kayıtlar</div>
+</div>
+
+</body>
+</html>

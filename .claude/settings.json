@@ -1,0 +1,12 @@
+{
+  "ignorePatterns": [
+    "*.exe",
+    "*.exe~",
+    "*.syso",
+    "out.txt",
+    "err.txt",
+    "err_v2.txt",
+    "assets/",
+    "vendor/"
+  ]
+}

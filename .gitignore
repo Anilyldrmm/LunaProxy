@@ -1,0 +1,26 @@
+# Build outputs (root'taki derlenmiş binary'ler)
+/*.exe
+/*.exe~
+# assets/gdpi içindeki binary'ler git'te takip edilir (bundle için)
+!assets/gdpi/*.exe
+!assets/gdpi/*.dll
+!assets/gdpi/*.sys
+
+# Logs
+*.txt
+*.log
+
+# IDE / OS
+.vscode/
+.idea/
+Thumbs.db
+desktop.ini
+
+# Inno Setup output
+installer/Output/
+
+# Debug / temp
+ssh_*.py
+*_debug.*
+*_test.*
+*_dbg.*

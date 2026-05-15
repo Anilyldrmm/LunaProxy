@@ -1,9 +1,7 @@
 package main
 
 import (
-	"bytes"
 	"fmt"
-	"image/png"
 	"net"
 	"os"
 	"os/exec"
@@ -59,23 +57,9 @@ func hiddenRun(name string, args ...string) {
 	cmd.Run()
 }
 
-// ── Uygulama ikonu — .ico bayt (network.go → icon.go'ya taşındı) ─────────────
-// makeIconImage ve setpx artık icon.go içinde.
-
-// openBrowser — PAC QR fallback. walk varsa kullanılmaz ama dns.go'daki
-// PS çıktısını yakalamak için hâlâ gerekli olabilir.
+// openBrowser — PAC QR fallback.
 func openBrowser(url string) {
 	hiddenRun("rundll32", "url.dll,FileProtocolHandler", url)
-}
-
-// ── Tray ikon PNG baytları (legacy — artık icon.go kullanılıyor) ──────────────
-// Sadece pac.go'daki /qr.png endpoint'i için PNG üretimi burada kalıyor.
-
-func makeIconPNG(active bool) []byte {
-	img := makeIconImage(active)
-	var buf bytes.Buffer
-	png.Encode(&buf, img)
-	return buf.Bytes()
 }
 
 // writeTempPNG — QR PNG için yardımcı

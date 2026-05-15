@@ -21,14 +21,18 @@ type Config struct {
 	CustomFlags string `json:"custom_flags"` // DPIMode="custom" ise
 
 	// GoodbyeDPI yönetimi
-	GDPIPath   string `json:"gdpi_path"`
-	ManageGDPI bool   `json:"manage_gdpi"`
+	GDPIPath  string `json:"gdpi_path"`
+	DPISource string `json:"dpi_source"` // "auto" | "service" | "manual" | "disabled"
 
 	// DNS
 	DNSMode string `json:"dns_mode"` // unchanged | cloudflare | google | adguard | quad9 | opendns
 
 	// Sistem proxy
 	SetSystemProxy bool `json:"set_system_proxy"` // Windows sistem proxy'sini otomatik ayarla
+
+	// Başlangıç
+	AutoStart      bool `json:"auto_start"`       // Windows startup kaydı
+	ProxyAutoStart bool `json:"proxy_auto_start"` // App açılınca proxy'yi otomatik başlat
 }
 
 // ── DPI Modları ───────────────────────────────────────────────────────────────
@@ -79,7 +83,7 @@ func defaultConfig() Config {
 		ChunkSize:      40,
 		ISP:            "auto",
 		DNSMode:        "unchanged",
-		ManageGDPI:     false,
+		DPISource:      "auto",
 		SetSystemProxy: false,
 	}
 }
@@ -102,6 +106,7 @@ func loadConfig() {
 	if c.DPIMode == "" { c.DPIMode = "balanced" }
 	if c.ChunkSize == 0 { c.ChunkSize = 40 }
 	if c.ISP == "" { c.ISP = "auto" }
+	if c.DPISource == "" { c.DPISource = "auto" }
 	cfgMu.Lock()
 	current = c
 	cfgMu.Unlock()

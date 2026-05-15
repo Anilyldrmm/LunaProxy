@@ -23,20 +23,23 @@ func openRunKey(write bool) (registry.Key, error) {
 const appName = "SpAC3DPI"
 
 type app struct {
-	mu       sync.Mutex
-	running  bool
-	localIP  string
-	proxySrv *http.Server
-	pacSrv   *http.Server
-	pacPort  int // aktif PAC port'u takip — port değişirse sunucu yeniden başlar
+	mu        sync.Mutex
+	running   bool
+	localIP   string
+	proxySrv  *http.Server
+	pacSrv    *http.Server
+	pacPort   int    // aktif PAC port'u takip — port değişirse sunucu yeniden başlar
+	dpiSource string // aktif DPI kaynağı: "service"|"process"|"manual"|"bundle"|"disabled"|"none"|""
 }
 
 var g *app
 
+// appExiting — tray "Çıkış" tıklandığında true; Closing handler gerçek kapanmaya izin verir.
+var appExiting bool
+
 func main() {
 	if !ensureSingleInstance() {
-		theUI.mw.Synchronize(theUI.showWindow)
-		return
+		return // başka örnek zaten çalışıyor — sessizce çık
 	}
 
 	SentinelCheck()
@@ -52,7 +55,19 @@ func main() {
 		g.pacPort = c.PACPort
 	}
 
-	runUI() // walk mesaj döngüsü — çıkana kadar bloklar
+	initTray()
+
+	StartUpdateChecker(func(tag string) {
+		pendingUpdateTag.Store(tag)
+	})
+
+	if c.ProxyAutoStart {
+		if err := g.start(); err != nil {
+			logError("Otomatik başlatma hatası: " + err.Error())
+		}
+	}
+
+	initWindow() // WebView2 mesaj döngüsü — çıkana kadar bloklar
 }
 
 // ── Uygulama yaşam döngüsü ────────────────────────────────────────────────────
@@ -93,6 +108,7 @@ func (a *app) start() error {
 	// PAC içeriğini proxy moduna al; router'a da bildir
 	setPACRunning(a.localIP, c.ProxyPort)
 	go pushRouterPAC(a.localIP, "proxy", c.ProxyPort)
+	startRouterHeartbeat(guessGatewayIP(a.localIP))
 
 	if c.DNSMode != "unchanged" && c.DNSMode != "" {
 		go func() {
@@ -107,14 +123,26 @@ func (a *app) start() error {
 		go SetSystemProxy(fmt.Sprintf("%s:%d", a.localIP, c.ProxyPort))
 	}
 
-	if c.ManageGDPI && c.GDPIPath != "" {
-		go func() {
-			StopWindowsService()
-			if err := gdpi.Start(c.GDPIPath, activeGDPIFlags()); err != nil {
+	go func() {
+		result, err := ResolveDPI(c)
+		if err != nil {
+			logWarn("DPI kaynağı belirlenemedi: " + err.Error())
+			a.mu.Lock()
+			a.dpiSource = "none"
+			a.mu.Unlock()
+			return
+		}
+		a.mu.Lock()
+		a.dpiSource = result.Source
+		a.mu.Unlock()
+		if result.ExePath != "" {
+			if err := gdpi.Start(result.ExePath, activeGDPIFlags()); err != nil {
 				logError("GoodbyeDPI başlatılamadı: " + err.Error())
 			}
-		}()
-	}
+		} else {
+			logInfo("GoodbyeDPI kaynağı: " + result.Source + " (harici, dokunulmuyor)")
+		}
+	}()
 
 	a.proxySrv = ps
 	a.running = true
@@ -123,8 +151,8 @@ func (a *app) start() error {
 	watchdog.Stop()
 	watchdog.Start()
 
-	logInfo(fmt.Sprintf("SpAC3DPI başlatıldı | IP:%s Proxy:%d PAC:%d DPI:%s ISP:%s DNS:%s",
-		a.localIP, c.ProxyPort, c.PACPort, c.DPIMode, c.ISP, c.DNSMode))
+	logInfo(fmt.Sprintf("SpAC3DPI başlatıldı | IP:%s Proxy:%d PAC:%d DPIMode:%s ISP:%s DNS:%s DPISrc:%s",
+		a.localIP, c.ProxyPort, c.PACPort, c.DPIMode, c.ISP, c.DNSMode, c.DPISource))
 	return nil
 }
 
@@ -135,12 +163,13 @@ func (a *app) stop() {
 		return
 	}
 
-	// 1. PAC'ı önce DIRECT yap — iOS yeni PAC'ı hemen çekebilsin.
+	// 1. Heartbeat durdur + PAC'ı DIRECT yap
+	stopRouterHeartbeat()
 	setPACDirect()
-	go pushRouterPAC(a.localIP, "direct", 0)
 
 	// 2. Durumu hemen stopped'a al — watchdog ve UI güncellenir.
 	proxySrv := a.proxySrv
+	localIP := a.localIP
 	a.proxySrv = nil
 	a.running = false
 
@@ -151,16 +180,20 @@ func (a *app) stop() {
 	if c.SetSystemProxy {
 		RestoreSystemProxy()
 	}
-	if c.ManageGDPI {
+	if gdpi.IsRunning() {
 		gdpi.Stop()
 	}
+	a.dpiSource = ""
 
 	a.mu.Unlock()
 
-	// 3. Proxy'yi 3 saniye sonra kapat — iOS PAC geçişi için bekleme süresi.
-	// Bu sürede PAC zaten DIRECT; telefon yeni PAC'ı çeker, proxy kapanınca sorunsuz geçiş yapar.
+	// 3. Router PAC'ı senkron güncelle, ardından proxy'yi kapat.
+	// pushRouterPAC önce tamamlanır (max ~6s), sonra 5s daha bekle → iOS yeni PAC'ı çeker.
+	// Toplam ~11s proxy ayakta kalır; bu sürede eski cached PAC kullanan iOS
+	// bağlantılarını sürdürür, yeni PAC çekince DIRECT'e geçer.
 	go func() {
-		time.Sleep(3 * time.Second)
+		pushRouterPAC(localIP, "direct", 0)
+		time.Sleep(5 * time.Second)
 		if proxySrv != nil {
 			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 			defer cancel()

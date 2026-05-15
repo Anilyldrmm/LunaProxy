@@ -11,7 +11,7 @@ import (
 )
 
 // GDPIManager — GoodbyeDPI sürecini yönetir.
-// ManageGDPI=false ise hiçbir şey yapmaz; kullanıcının kendi servisi devreye girer.
+// DPISource="disabled" veya harici kaynak varsa doğrudan çağrılmaz; uygulama yönetiminde başlatılır.
 type GDPIManager struct {
 	mu      sync.Mutex
 	proc    *exec.Cmd
@@ -93,8 +93,7 @@ func (m *GDPIManager) Restart(exePath, flags string) error {
 	return m.Start(exePath, flags)
 }
 
-// StopWindowsService — eğer GoodbyeDPI Windows servisi varsa durdurur.
-// ManageGDPI aktif edilince çakışmayı önlemek için çağrılır.
+// StopWindowsService — çakışmayı önlemek için GoodbyeDPI Windows servisini durdurur.
 func StopWindowsService() {
 	for _, name := range []string{"GoodbyeDPI", "goodbyedpi", "GoodbyeDPI Service"} {
 		hiddenRun("sc", "stop", name)
