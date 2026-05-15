@@ -122,8 +122,21 @@ func sshRun(client *ssh.Client, cmd string) (string, error) {
 	return strings.TrimSpace(string(out)), err
 }
 
-// sshWriteFile — dosyayı stdin→cat ile router'a yazar.
-// sudo != "" ise sudo tee kullanır (non-root kullanıcılar için).
+// shQuote — sh single-quote escape: 'foo bar' → içindeki ' → '\''
+func shQuote(s string) string {
+	return "'" + strings.ReplaceAll(s, "'", `'\''`) + "'"
+}
+
+// sshExec — sudo gerekiyorsa 'sudo sh -c <cmd>' ile çalıştırır.
+// sudo sh -c kullanmak, sudo'nun secure_path kısıtlamasını aşar.
+func sshExec(client *ssh.Client, cmd, sudo string) (string, error) {
+	if sudo == "" {
+		return sshRun(client, cmd)
+	}
+	return sshRun(client, "sudo sh -c "+shQuote(cmd))
+}
+
+// sshWriteFile — dosyayı stdin→cat/tee ile router'a yazar.
 func sshWriteFile(client *ssh.Client, path, content, sudo string) error {
 	session, err := client.NewSession()
 	if err != nil {
@@ -132,10 +145,10 @@ func sshWriteFile(client *ssh.Client, path, content, sudo string) error {
 	defer session.Close()
 	session.Stdin = strings.NewReader(content)
 	if sudo == "" {
-		return session.Run(fmt.Sprintf("cat > '%s'", path))
+		return session.Run("cat > " + shQuote(path))
 	}
-	// sudo tee ile yaz; stdout discard et
-	return session.Run(fmt.Sprintf("%stee '%s' > /dev/null", sudo, path))
+	// sudo sh -c 'tee /path > /dev/null' — secure_path sorununu aşar
+	return session.Run("sudo sh -c " + shQuote("tee "+shQuote(path)+" > /dev/null"))
 }
 
 // ── Tespit fonksiyonları ─────────────────────────────────────────────────────
@@ -279,7 +292,7 @@ func RouterInstall(cfg RouterSetupCfg, progress func(RouterStep)) error {
 	cgiDir := pacDir + "/cgi-bin"
 
 	progress(RouterStep{"Dosyalar oluşturuluyor...", "info"})
-	if _, err := sshRun(client, sudo+"mkdir -p '"+cgiDir+"'"); err != nil {
+	if _, err := sshExec(client, "mkdir -p "+shQuote(cgiDir), sudo); err != nil {
 		return fmt.Errorf("dizin oluşturulamadı: %w", err)
 	}
 
@@ -312,7 +325,7 @@ func RouterInstall(cfg RouterSetupCfg, progress func(RouterStep)) error {
 			return fmt.Errorf("%s yazılamadı: %w", f.path, err)
 		}
 		if f.exec {
-			if _, err := sshRun(client, sudo+fmt.Sprintf("chmod +x '%s'", f.path)); err != nil {
+			if _, err := sshExec(client, "chmod +x "+shQuote(f.path), sudo); err != nil {
 				return fmt.Errorf("%s için chmod başarısız: %w", f.path, err)
 			}
 		}
@@ -320,7 +333,7 @@ func RouterInstall(cfg RouterSetupCfg, progress func(RouterStep)) error {
 	progress(RouterStep{"Scriptler yazıldı", "ok"})
 
 	// Eski sunucu süreçlerini durdur — sadece 8090 portundakileri
-	sshRun(client, sudo+"fuser -k 8090/tcp 2>/dev/null; true")
+	sshExec(client, "fuser -k 8090/tcp 2>/dev/null; true", sudo) //nolint:errcheck
 	time.Sleep(300 * time.Millisecond)
 
 	if useLighttpd {
@@ -328,26 +341,26 @@ func RouterInstall(cfg RouterSetupCfg, progress func(RouterStep)) error {
 		if out, _ := sshRun(client, "which lighttpd 2>/dev/null"); out != "" {
 			lighttpdBin = out
 		}
-		sshRun(client, sudo+`sh -c 'if [ -f /tmp/spac3dpi_lighttpd.pid ]; then kill $(cat /tmp/spac3dpi_lighttpd.pid) 2>/dev/null; sleep 1; fi'`)
-		if out, err := sshRun(client, sudo+lighttpdBin+" -f '"+pacDir+"/lighttpd.conf'"); err != nil {
+		sshExec(client, `if [ -f /tmp/spac3dpi_lighttpd.pid ]; then kill $(cat /tmp/spac3dpi_lighttpd.pid) 2>/dev/null; sleep 1; fi`, sudo) //nolint:errcheck
+		if out, err := sshExec(client, lighttpdBin+" -f "+shQuote(pacDir+"/lighttpd.conf"), sudo); err != nil {
 			return fmt.Errorf("lighttpd başlatılamadı: %s", out)
 		}
 		progress(RouterStep{"lighttpd başlatıldı (port 8090)", "ok"})
 	} else if httpdBin != "" {
-		// system httpd veya busybox httpd — arka planda başlat
-		start := fmt.Sprintf("sh -c 'nohup %s -p 8090 -h %s >/dev/null 2>&1 &'", httpdBin, pacDir)
-		if _, err := sshRun(client, sudo+start); err != nil {
+		// system httpd veya busybox httpd — nohup ile arka planda başlat
+		startCmd := fmt.Sprintf("nohup %s -p 8090 -h %s >/dev/null 2>&1 &", httpdBin, shQuote(pacDir))
+		if _, err := sshExec(client, startCmd, sudo); err != nil {
 			// nohup yoksa basit & ile dene
-			if out, err2 := sshRun(client, sudo+httpdBin+" -p 8090 -h '"+pacDir+"' &"); err2 != nil {
+			if out, err2 := sshExec(client, fmt.Sprintf("%s -p 8090 -h %s &", httpdBin, shQuote(pacDir)), sudo); err2 != nil {
 				return fmt.Errorf("httpd başlatılamadı: %s", out)
 			}
 		}
 		progress(RouterStep{httpdBin + " başlatıldı (port 8090)", "ok"})
 	} else {
 		// Python CGI HTTP server
-		start := fmt.Sprintf("sh -c 'cd %s && nohup %s -m %s 8090 >/dev/null 2>&1 &'",
-			pacDir, pythonBin, pythonMod)
-		if _, err := sshRun(client, sudo+start); err != nil {
+		startCmd := fmt.Sprintf("cd %s && nohup %s -m %s 8090 >/dev/null 2>&1 &",
+			shQuote(pacDir), pythonBin, pythonMod)
+		if _, err := sshExec(client, startCmd, sudo); err != nil {
 			return fmt.Errorf("Python HTTP sunucu başlatılamadı")
 		}
 		progress(RouterStep{"Python HTTP sunucu başlatıldı (port 8090)", "ok"})

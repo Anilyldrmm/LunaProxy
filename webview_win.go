@@ -3,10 +3,9 @@
 package main
 
 import (
+	"encoding/binary"
 	"fmt"
-	"os"
 	"strings"
-	"syscall"
 	"unsafe"
 
 	webview "github.com/jchv/go-webview2"
@@ -22,8 +21,9 @@ var (
 	wvProcShowWindow       = wvModUser32.NewProc("ShowWindow")
 	wvProcLoadImage        = wvModUser32.NewProc("LoadImageW")
 
-	wvProcReleaseCapture   = wvModUser32.NewProc("ReleaseCapture")
-	wvProcSendMessage      = wvModUser32.NewProc("SendMessageW")
+	wvProcReleaseCapture           = wvModUser32.NewProc("ReleaseCapture")
+	wvProcSendMessage              = wvModUser32.NewProc("SendMessageW")
+	wvProcCreateIconFromResourceEx = wvModUser32.NewProc("CreateIconFromResourceEx")
 
 	wvModDwmapi            = windows.NewLazySystemDLL("dwmapi.dll")
 	wvProcDwmSetWindowAttr = wvModDwmapi.NewProc("DwmSetWindowAttribute")
@@ -44,6 +44,8 @@ const (
 	wvSwHide       = uintptr(0)
 	wvSmCxScreen   = uintptr(0)
 	wvSmCyScreen   = uintptr(1)
+	wvSmCxIcon     = uintptr(11) // SM_CXICON — büyük ikon (32px @100%)
+	wvSmCxSmIcon   = uintptr(49) // SM_CXSMICON — küçük ikon (16px @100%)
 	// DWM
 	wvDwmwaBorderColor  = uintptr(34)
 	wvDwmwaColorNone    = uint32(0xFFFFFFFE)
@@ -117,38 +119,82 @@ func wvApplyDWMShadow(hwnd uintptr) {
 		uintptr(unsafe.Pointer(&round)), 4)
 }
 
-// wvSetTaskbarIcon — Windows GDI+ ile üretilmiş ICO'yu HICON'a çevirir, WM_SETICON gönderir.
+// icoEntryHICON — ICO bayt dizisinden istenen boyuta en yakın girdiye HICON üretir.
+// CreateIconFromResourceEx kullanır — temp dosya yok, bellek içi, DPI-safe.
+func icoEntryHICON(icoBytes []byte, wantSize int) uintptr {
+	if len(icoBytes) < 6 {
+		return 0
+	}
+	count := int(binary.LittleEndian.Uint16(icoBytes[4:6]))
+	if count == 0 || len(icoBytes) < 6+count*16 {
+		return 0
+	}
+	bestIdx, bestDiff := -1, 999
+	for i := 0; i < count; i++ {
+		e := icoBytes[6+i*16:]
+		w := int(e[0])
+		if w == 0 {
+			w = 256
+		}
+		if d := abs(w - wantSize); d < bestDiff {
+			bestDiff, bestIdx = d, i
+		}
+	}
+	if bestIdx < 0 {
+		return 0
+	}
+	e := icoBytes[6+bestIdx*16:]
+	dataSize := binary.LittleEndian.Uint32(e[8:12])
+	dataOff := binary.LittleEndian.Uint32(e[12:16])
+	if int(dataOff)+int(dataSize) > len(icoBytes) {
+		return 0
+	}
+	img := icoBytes[dataOff : dataOff+dataSize]
+	hicon, _, _ := wvProcCreateIconFromResourceEx.Call(
+		uintptr(unsafe.Pointer(&img[0])),
+		uintptr(dataSize),
+		1,          // fIcon = TRUE
+		0x00030000, // dwVersion = Windows 3.0+
+		uintptr(wantSize),
+		uintptr(wantSize),
+		0, // LR_DEFAULTCOLOR
+	)
+	return hicon
+}
+
+func abs(x int) int {
+	if x < 0 {
+		return -x
+	}
+	return x
+}
+
+// wvSetTaskbarIcon — CreateIconFromResourceEx ile HICON üretir, WM_SETICON gönderir.
+// DPI-aware: GetSystemMetrics(SM_CXSMICON/SM_CXICON) ile gerçek boyutu sorgular.
 func wvSetTaskbarIcon(hwnd uintptr) {
-	// rawICOBytes: embed edilmiş Windows HighQualityBicubic ICO (tüm DPI boyutları)
 	icoBytes := rawICOBytes
 	if len(icoBytes) == 0 {
-		icoBytes = makeICOBytes(true) // fallback: runtime üretim
+		icoBytes = makeICOBytes(true)
 	}
-	f, err := os.CreateTemp("", "spac3dpi_*.ico")
-	if err != nil {
+	if len(icoBytes) == 0 {
 		return
 	}
-	defer os.Remove(f.Name())
-	f.Write(icoBytes)
-	f.Close()
 
-	path16, err := syscall.UTF16PtrFromString(f.Name())
-	if err != nil {
-		return
-	}
-	const imageIcon = 1
-	const lrLoadFromFile = 0x10
+	smW, _, _ := wvProcGetSystemMetrics.Call(wvSmCxSmIcon) // küçük ikon (16px @100%)
+	bgW, _, _ := wvProcGetSystemMetrics.Call(wvSmCxIcon)   // büyük ikon (32px @100%)
+
+	hSmall := icoEntryHICON(icoBytes, int(smW))
+	hBig := icoEntryHICON(icoBytes, int(bgW))
+
 	const wmSetIcon = 0x0080
-	hSmall, _, _ := wvProcLoadImage.Call(0, uintptr(unsafe.Pointer(path16)), imageIcon, 16, 16, lrLoadFromFile)
-	hBig, _, _ := wvProcLoadImage.Call(0, uintptr(unsafe.Pointer(path16)), imageIcon, 32, 32, lrLoadFromFile)
 	if hBig == 0 {
 		return
 	}
 	if hSmall == 0 {
 		hSmall = hBig
 	}
-	wvProcSendMessage.Call(hwnd, wmSetIcon, 0, hSmall) // ICON_SMALL (taskbar, 16px)
-	wvProcSendMessage.Call(hwnd, wmSetIcon, 1, hBig)   // ICON_BIG (alt-tab, 32px)
+	wvProcSendMessage.Call(hwnd, wmSetIcon, 0, hSmall) // ICON_SMALL
+	wvProcSendMessage.Call(hwnd, wmSetIcon, 1, hBig)   // ICON_BIG
 }
 
 // showWindow — pencereyi göster (tray'den çağrılır).
