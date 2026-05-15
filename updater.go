@@ -111,6 +111,8 @@ func DownloadAndReplace(downloadURL string) error {
 	// UTF-8 BOM zorunlu: PowerShell 5.x BOM olmadan Windows-1252 okur,
 	// non-ASCII yollar (örn. "Masaüstü") bozulur ve Copy-Item başarısız olur.
 	const utf8BOM = "\xEF\xBB\xBF"
+	// WScript.Shell.Run — hidden PowerShell'den GUI app başlatmak için
+	// Start-Process yerine kullanılır; desktop/window-station gerektirmez.
 	script := utf8BOM + fmt.Sprintf(`$src = '%s'
 $dst = '%s'
 $ps1path = '%s'
@@ -125,7 +127,11 @@ for ($i = 0; $i -lt 10; $i++) {
         Start-Sleep -Seconds 1
     }
 }
-if ($ok) { Start-Process $dst }
+if ($ok) {
+    $cmd = '"' + $dst + '"'
+    $s = New-Object -COM 'WScript.Shell'
+    $s.Run($cmd, 1, $false)
+}
 Remove-Item $ps1path -ErrorAction SilentlyContinue
 `, newExe, selfExe, ps1)
 	if err := os.WriteFile(ps1, []byte(script), 0644); err != nil {
