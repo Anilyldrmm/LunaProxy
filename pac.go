@@ -112,7 +112,7 @@ func buildPACMux(localIP string, port int) *http.ServeMux {
 	mux.HandleFunc("/setup", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
 		w.Header().Set("Cache-Control", "no-store")
-		fmt.Fprintf(w, setupPageHTML, routerPACURL, routerPACURL, pacURL)
+		fmt.Fprintf(w, setupPageHTML, routerPACURL, pacURL)
 	})
 
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
@@ -147,6 +147,7 @@ h1{font-size:20px;font-weight:700;margin-bottom:4px}
 .step{font-size:13px;color:#6B6490;padding:3px 0;padding-left:16px;position:relative}
 .step::before{content:"→";position:absolute;left:0;color:#8B3FBF}
 .copied{background:linear-gradient(135deg,#16a34a,#15803d)!important}
+.fallback-btn{background:#1A1628;border:1px solid #2A2240;color:#6B6490}
 hr{border:none;border-top:1px solid #2A2240;margin:16px 0}
 </style></head>
 <body><div class="card">
@@ -157,6 +158,7 @@ hr{border:none;border-top:1px solid #2A2240;margin:16px 0}
 <button class="copy-btn" id="rbtn" onclick="cp('rurl','rbtn')">Kopyala</button>
 <div class="badge fallback">YEDEK — Sadece PC acikken</div>
 <div class="url-box" id="purl">%s</div>
+<button class="copy-btn fallback-btn" id="pbtn" onclick="cp('purl','pbtn')">Kopyala</button>
 <hr>
 <div class="section"><h2>Android</h2>
 <div class="step">Wi-Fi ayarlari → Bağli ağa uzun bas → Aği degistir</div>

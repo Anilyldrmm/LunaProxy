@@ -61,6 +61,9 @@ func CheckUpdate() (tagName, downloadURL string, err error) {
 		return "", "", err
 	}
 	defer resp.Body.Close()
+	if resp.StatusCode == 404 {
+		return "", "", nil // henüz release yok
+	}
 	if resp.StatusCode != 200 {
 		return "", "", fmt.Errorf("GitHub API: %d", resp.StatusCode)
 	}
