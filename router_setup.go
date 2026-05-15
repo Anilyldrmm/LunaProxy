@@ -156,11 +156,11 @@ func hasLighttpd(client *ssh.Client) bool {
 }
 
 // findHTTPD — sistem genelinde httpd binary'sini arar.
-// Birçok consumer router'da BusyBox httpd, /usr/sbin/httpd veya /bin/httpd olarak bulunur.
-// Binary yolunu ve bulunup bulunmadığını döner.
+// command -v (POSIX builtin) önce, ardından which ve bilinen yollar denenir.
 func findHTTPD(client *ssh.Client) (string, bool) {
 	out, _ := sshRun(client,
-		"which httpd 2>/dev/null || "+
+		"command -v httpd 2>/dev/null || "+
+			"which httpd 2>/dev/null || "+
 			"ls /usr/sbin/httpd /usr/bin/httpd /bin/httpd /sbin/httpd 2>/dev/null | head -1")
 	out = strings.TrimSpace(out)
 	if out != "" && strings.Contains(out, "httpd") {
@@ -170,14 +170,34 @@ func findHTTPD(client *ssh.Client) (string, bool) {
 }
 
 // hasBusyboxHTTPD — busybox binary'si httpd applet içeriyor mu?
-// findHTTPD'den önce düşer; busybox'u 'busybox httpd' şeklinde çağırır.
 func hasBusyboxHTTPD(client *ssh.Client) bool {
-	out, _ := sshRun(client, "which busybox 2>/dev/null || ls /bin/busybox 2>/dev/null")
+	out, _ := sshRun(client,
+		"command -v busybox 2>/dev/null || which busybox 2>/dev/null || "+
+			"ls /bin/busybox /usr/bin/busybox 2>/dev/null | head -1")
 	if !strings.Contains(out, "busybox") {
 		return false
 	}
+	// --list ile applet listesi, yoksa doğrudan test et
 	applets, _ := sshRun(client, "busybox --list 2>/dev/null")
-	return strings.Contains(applets, "httpd")
+	if strings.Contains(applets, "httpd") {
+		return true
+	}
+	help, _ := sshRun(client, "busybox httpd --help 2>&1")
+	return strings.Contains(help, "-p") || strings.Contains(help, "port")
+}
+
+// findPython — python3 veya python2 binary'sini arar.
+// (bin, cgiModule, ok) döner; cgiModule http.server --cgi veya CGIHTTPServer.
+func findPython(client *ssh.Client) (bin, cgiModule string, ok bool) {
+	out, _ := sshRun(client, "command -v python3 2>/dev/null || which python3 2>/dev/null")
+	if strings.TrimSpace(out) != "" {
+		return "python3", "http.server --cgi", true
+	}
+	out, _ = sshRun(client, "command -v python 2>/dev/null || which python 2>/dev/null")
+	if strings.TrimSpace(out) != "" {
+		return "python", "CGIHTTPServer", true
+	}
+	return "", "", false
 }
 
 // getSudoPrefix — SSH kullanıcısı root değilse "sudo " döner.
@@ -216,9 +236,11 @@ func RouterInstall(cfg RouterSetupCfg, progress func(RouterStep)) error {
 		progress(RouterStep{"Linux tabanlı firmware — devam ediliyor", "info"})
 	}
 
-	// HTTP sunucu seçimi
+	// HTTP sunucu seçimi — öncelik: lighttpd > httpd > busybox httpd > python
 	useLighttpd := false
-	httpdBin := "" // "busybox httpd" veya "/usr/sbin/httpd" gibi komut
+	httpdBin := ""    // system httpd veya "busybox httpd"
+	pythonBin := ""   // "python3" veya "python"
+	pythonMod := ""   // "http.server --cgi" veya "CGIHTTPServer"
 
 	if hasLighttpd(client) {
 		useLighttpd = true
@@ -236,8 +258,12 @@ func RouterInstall(cfg RouterSetupCfg, progress func(RouterStep)) error {
 	} else if hasBusyboxHTTPD(client) {
 		httpdBin = "busybox httpd"
 		progress(RouterStep{"BusyBox httpd kullanılacak", "info"})
+	} else if pb, pm, ok := findPython(client); ok {
+		pythonBin = pb
+		pythonMod = pm
+		progress(RouterStep{"Python CGI sunucu kullanılacak (" + pb + ")", "info"})
 	} else {
-		return fmt.Errorf("HTTP sunucu bulunamadı — router'da httpd, lighttpd veya BusyBox gerekli")
+		return fmt.Errorf("HTTP sunucu bulunamadı — lighttpd, httpd, BusyBox veya Python gerekli")
 	}
 
 	// Dizin yapısı: lighttpd→/opt/share/pac, diğerleri→/tmp/pac
@@ -293,27 +319,33 @@ func RouterInstall(cfg RouterSetupCfg, progress func(RouterStep)) error {
 	time.Sleep(300 * time.Millisecond)
 
 	if useLighttpd {
-		// lighttpd binary konumunu bul
 		lighttpdBin := "/opt/bin/lighttpd"
 		if out, _ := sshRun(client, "which lighttpd 2>/dev/null"); out != "" {
 			lighttpdBin = out
 		}
-		// Eski lighttpd PID dosyasını temizle
 		sshRun(client, sudo+`sh -c 'if [ -f /tmp/spac3dpi_lighttpd.pid ]; then kill $(cat /tmp/spac3dpi_lighttpd.pid) 2>/dev/null; sleep 1; fi'`)
 		if out, err := sshRun(client, sudo+lighttpdBin+" -f '"+pacDir+"/lighttpd.conf'"); err != nil {
 			return fmt.Errorf("lighttpd başlatılamadı: %s", out)
 		}
 		progress(RouterStep{"lighttpd başlatıldı (port 8090)", "ok"})
-	} else {
-		// httpd veya busybox httpd — arka planda başlat
-		startCmd := fmt.Sprintf("nohup %s -p 8090 -h '%s' >/dev/null 2>&1 &", httpdBin, pacDir)
-		if _, err := sshRun(client, sudo+startCmd); err != nil {
-			// nohup yoksa basit arka plan
+	} else if httpdBin != "" {
+		// system httpd veya busybox httpd — arka planda başlat
+		start := fmt.Sprintf("sh -c 'nohup %s -p 8090 -h %s >/dev/null 2>&1 &'", httpdBin, pacDir)
+		if _, err := sshRun(client, sudo+start); err != nil {
+			// nohup yoksa basit & ile dene
 			if out, err2 := sshRun(client, sudo+httpdBin+" -p 8090 -h '"+pacDir+"' &"); err2 != nil {
 				return fmt.Errorf("httpd başlatılamadı: %s", out)
 			}
 		}
-		progress(RouterStep{"httpd başlatıldı (port 8090)", "ok"})
+		progress(RouterStep{httpdBin + " başlatıldı (port 8090)", "ok"})
+	} else {
+		// Python CGI HTTP server
+		start := fmt.Sprintf("sh -c 'cd %s && nohup %s -m %s 8090 >/dev/null 2>&1 &'",
+			pacDir, pythonBin, pythonMod)
+		if _, err := sshRun(client, sudo+start); err != nil {
+			return fmt.Errorf("Python HTTP sunucu başlatılamadı")
+		}
+		progress(RouterStep{"Python HTTP sunucu başlatıldı (port 8090)", "ok"})
 	}
 
 	time.Sleep(800 * time.Millisecond)
