@@ -19,6 +19,9 @@ var (
 	wvProcGetSystemMetrics = wvModUser32.NewProc("GetSystemMetrics")
 	wvProcShowWindow       = wvModUser32.NewProc("ShowWindow")
 
+	wvProcReleaseCapture   = wvModUser32.NewProc("ReleaseCapture")
+	wvProcSendMessage      = wvModUser32.NewProc("SendMessageW")
+
 	wvModDwmapi            = windows.NewLazySystemDLL("dwmapi.dll")
 	wvProcDwmSetWindowAttr = wvModDwmapi.NewProc("DwmSetWindowAttribute")
 )

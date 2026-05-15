@@ -10,8 +10,6 @@ import (
 	"image/png"
 	"os"
 	"path/filepath"
-
-	"github.com/lxn/walk"
 )
 
 //go:embed icon.png
@@ -185,122 +183,6 @@ func iconCacheDir() string {
 	d := filepath.Join(dir, "SpAC3DPI", "cache")
 	os.MkdirAll(d, 0755)
 	return d
-}
-
-var (
-	icoDefault     *walk.Icon
-	icoActive      *walk.Icon
-	icoTrayDefault *walk.Icon
-	icoTrayActive  *walk.Icon
-	bmpLogoDefault *walk.Bitmap
-	bmpLogoActive  *walk.Bitmap
-)
-
-func loadWalkIcon(active bool) *walk.Icon {
-	data := makeICOBytes(active)
-	if data == nil {
-		return nil
-	}
-	// Kalıcı dosya: temp silinirse ikon kaybolur sorununu önler.
-	name := "icon_off.ico"
-	if active {
-		name = "icon_on.ico"
-	}
-	path := filepath.Join(iconCacheDir(), name)
-	if err := os.WriteFile(path, data, 0644); err != nil {
-		return nil
-	}
-	ico, err := walk.NewIconFromFile(path)
-	if err != nil {
-		return nil
-	}
-	return ico
-}
-
-func getIcon(active bool) *walk.Icon {
-	if active {
-		if icoActive == nil {
-			icoActive = loadWalkIcon(true)
-		}
-		return icoActive
-	}
-	if icoDefault == nil {
-		icoDefault = loadWalkIcon(false)
-	}
-	return icoDefault
-}
-
-func loadTrayIcon(active bool) *walk.Icon {
-	data := makeTrayICOBytes(active)
-	if data == nil {
-		return nil
-	}
-	name := "tray_off.ico"
-	if active {
-		name = "tray_on.ico"
-	}
-	path := filepath.Join(iconCacheDir(), name)
-	if err := os.WriteFile(path, data, 0644); err != nil {
-		return nil
-	}
-	ico, err := walk.NewIconFromFile(path)
-	if err != nil {
-		return nil
-	}
-	return ico
-}
-
-func getTrayIcon(active bool) *walk.Icon {
-	if active {
-		if icoTrayActive == nil {
-			icoTrayActive = loadTrayIcon(true)
-		}
-		return icoTrayActive
-	}
-	if icoTrayDefault == nil {
-		icoTrayDefault = loadTrayIcon(false)
-	}
-	return icoTrayDefault
-}
-
-// loadLogoBitmap — PNG logoyu bitmap olarak yükler (hero ImageView için).
-func loadLogoBitmap(active bool) *walk.Bitmap {
-	src, err := png.Decode(bytes.NewReader(rawLogoBytes))
-	if err != nil {
-		return nil
-	}
-	if !active {
-		src = dimLogo(src)
-	}
-	resized := resizeLogo(src, 72)
-	var buf bytes.Buffer
-	png.Encode(&buf, resized)
-	name := "logo_off.png"
-	if active {
-		name = "logo_on.png"
-	}
-	path := filepath.Join(iconCacheDir(), name)
-	if err := os.WriteFile(path, buf.Bytes(), 0644); err != nil {
-		return nil
-	}
-	bmp, err := walk.NewBitmapFromFile(path)
-	if err != nil {
-		return nil
-	}
-	return bmp
-}
-
-func getLogoBitmap(active bool) *walk.Bitmap {
-	if active {
-		if bmpLogoActive == nil {
-			bmpLogoActive = loadLogoBitmap(true)
-		}
-		return bmpLogoActive
-	}
-	if bmpLogoDefault == nil {
-		bmpLogoDefault = loadLogoBitmap(false)
-	}
-	return bmpLogoDefault
 }
 
 // logoBase64 — PNG logoyu base64 olarak döndürür (WebView2 logo inject için).
