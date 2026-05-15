@@ -10,48 +10,18 @@ import (
 	"image/png"
 	"os"
 	"path/filepath"
+
+	"golang.org/x/image/draw"
 )
 
 //go:embed icon.png
 var rawLogoBytes []byte
 
-// resizeLogo — box-filter ile src'yi sz×sz'ye küçültür.
+// resizeLogo — CatmullRom bicubic ile src'yi sz×sz'ye ölçekler.
+// Box-filter'a göre kenarleri korur, pikselleşme olmaz.
 func resizeLogo(src image.Image, sz int) *image.NRGBA {
-	sb := src.Bounds()
-	sw, sh := sb.Dx(), sb.Dy()
 	dst := image.NewNRGBA(image.Rect(0, 0, sz, sz))
-	xScale := float64(sw) / float64(sz)
-	yScale := float64(sh) / float64(sz)
-	for dy := 0; dy < sz; dy++ {
-		y0 := int(float64(dy) * yScale)
-		y1 := int(float64(dy+1) * yScale)
-		if y1 > sh {
-			y1 = sh
-		}
-		for dx := 0; dx < sz; dx++ {
-			x0 := int(float64(dx) * xScale)
-			x1 := int(float64(dx+1) * xScale)
-			if x1 > sw {
-				x1 = sw
-			}
-			var rs, gs, bs, as, n int
-			for sy := y0; sy < y1; sy++ {
-				for sx := x0; sx < x1; sx++ {
-					r, g, b, a := src.At(sb.Min.X+sx, sb.Min.Y+sy).RGBA()
-					rs += int(r >> 8); gs += int(g >> 8)
-					bs += int(b >> 8); as += int(a >> 8)
-					n++
-				}
-			}
-			if n == 0 {
-				n = 1
-			}
-			dst.SetNRGBA(dx, dy, color.NRGBA{
-				R: uint8(rs / n), G: uint8(gs / n),
-				B: uint8(bs / n), A: uint8(as / n),
-			})
-		}
-	}
+	draw.CatmullRom.Scale(dst, dst.Bounds(), src, src.Bounds(), draw.Over, nil)
 	return dst
 }
 
