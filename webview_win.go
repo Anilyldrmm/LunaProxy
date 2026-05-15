@@ -42,8 +42,10 @@ const (
 	wvSmCxScreen   = uintptr(0)
 	wvSmCyScreen   = uintptr(1)
 	// DWM
-	wvDwmwaBorderColor = uintptr(34)
-	wvDwmwaColorNone   = uint32(0xFFFFFFFE)
+	wvDwmwaBorderColor  = uintptr(34)
+	wvDwmwaColorNone    = uint32(0xFFFFFFFE)
+	wvDwmwaCornerPref   = uintptr(33)   // DWMWA_WINDOW_CORNER_PREFERENCE (Win11+)
+	wvDwmwcpRound       = uint32(2)     // DWMWCP_ROUND
 )
 
 // wv — global WebView referansı; ipc.go'dan erişilir.
@@ -105,6 +107,10 @@ func wvApplyDWMShadow(hwnd uintptr) {
 	color := wvDwmwaColorNone
 	wvProcDwmSetWindowAttr.Call(hwnd, wvDwmwaBorderColor,
 		uintptr(unsafe.Pointer(&color)), 4)
+	// Yuvarlak köşeler — Win11+ DWMWCP_ROUND; Win10'da görmezden geliniyor
+	round := wvDwmwcpRound
+	wvProcDwmSetWindowAttr.Call(hwnd, wvDwmwaCornerPref,
+		uintptr(unsafe.Pointer(&round)), 4)
 }
 
 // showWindow — pencereyi göster (tray'den çağrılır).

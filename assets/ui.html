@@ -393,7 +393,12 @@ body {
 window.addEventListener('DOMContentLoaded', function() {
   if (window.__logoB64) {
     var src = 'data:image/png;base64,' + window.__logoB64;
-    document.querySelectorAll('.tb-logo-img, .logo-box-img').forEach(function(el) { el.src = src; });
+    document.querySelectorAll('.tb-logo-img, .logo-box-img').forEach(function(el) {
+      el.src = src;
+      el.style.display = 'block';
+    });
+    var s1 = document.getElementById('tbl-s'); if (s1) s1.style.display = 'none';
+    var s2 = document.getElementById('lbox-s'); if (s2) s2.style.display = 'none';
   }
 });
 </script>
@@ -403,7 +408,7 @@ window.addEventListener('DOMContentLoaded', function() {
 
   <!-- Titlebar -->
   <div class="titlebar" id="titlebar">
-    <div class="tb-logo"><img class="tb-logo-img" src="" alt="S" onerror="this.style.display='none';this.parentNode.textContent='S'">S</div>
+    <div class="tb-logo"><img class="tb-logo-img" src="" alt="" style="display:none;width:28px;height:28px;object-fit:cover;border-radius:8px"><span id="tbl-s">S</span></div>
     <div>
       <div class="tb-name">SpAC3DPI</div>
       <div class="tb-sub">DPI Bypass Proxy</div>
@@ -464,7 +469,8 @@ window.addEventListener('DOMContentLoaded', function() {
           <div class="logo-wrap">
             <div class="logo-ring" id="ring"></div>
             <div class="logo-box" id="lbox">
-              S
+              <img class="logo-box-img" src="" alt="" style="display:none;position:absolute;inset:0;z-index:3;border-radius:20px;width:84px;height:84px;object-fit:cover">
+              <span id="lbox-s">S</span>
               <!-- pixel glitch -->
               <div class="px" style="width:5px;height:5px;background:#C084FC;bottom:14px;right:-3px;opacity:.6"></div>
               <div class="px" style="width:3px;height:3px;background:#8B3FBF;bottom:8px;right:-7px;opacity:.5"></div>
