@@ -29,6 +29,9 @@ type Config struct {
 
 	// Sistem proxy
 	SetSystemProxy bool `json:"set_system_proxy"` // Windows sistem proxy'sini otomatik ayarla
+
+	// Başlangıç
+	AutoStart bool `json:"auto_start"`
 }
 
 // ── DPI Modları ───────────────────────────────────────────────────────────────
