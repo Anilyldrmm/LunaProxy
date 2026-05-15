@@ -101,6 +101,52 @@ func handleIPCMessage(data string) {
 		if err := DownloadAndReplace(p.URL); err != nil {
 			logError("Güncelleme başarısız: " + err.Error())
 		}
+
+	case "routerSetup":
+		var p RouterSetupCfg
+		if err := json.Unmarshal(msg.Payload, &p); err != nil {
+			logWarn("routerSetup parse: " + err.Error())
+			return
+		}
+		if p.Port == 0 {
+			p.Port = 22
+		}
+		go func() {
+			err := RouterInstall(p, func(step RouterStep) {
+				data, _ := json.Marshal(step)
+				evalJS(fmt.Sprintf(`routerProgress(%s)`, data))
+			})
+			if err != nil {
+				data, _ := json.Marshal(RouterStep{Msg: err.Error(), Status: "error"})
+				evalJS(fmt.Sprintf(`routerProgress(%s)`, data))
+			} else {
+				evalJS(`routerDone()`)
+			}
+		}()
+
+	case "routerTest":
+		var p struct {
+			Host string `json:"host"`
+		}
+		json.Unmarshal(msg.Payload, &p) //nolint:errcheck
+		go func() {
+			if err := RouterTest(p.Host); err != nil {
+				evalJS(fmt.Sprintf(`routerTestResult(%s)`, jsonEscape("HATA: "+err.Error())))
+			} else {
+				evalJS(fmt.Sprintf(`routerTestResult(%s)`, jsonEscape("OK — PAC erişilebilir")))
+			}
+		}()
+
+	case "requestRouterDefaults":
+		c := getConfig()
+		gateway := guessGatewayIP(g.localIP)
+		data, _ := json.Marshal(map[string]string{
+			"host":    gateway,
+			"user":    "root",
+			"port":    "22",
+			"pacPort": fmt.Sprintf("%d", c.PACPort),
+		})
+		evalJS(fmt.Sprintf(`loadRouterDefaults(%s)`, data))
 	}
 }
 
