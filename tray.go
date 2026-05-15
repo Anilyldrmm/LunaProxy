@@ -1,4 +1,4 @@
-//go:build windows
+﻿//go:build windows
 
 package main
 
@@ -19,13 +19,15 @@ func initTray() {
 
 func onTrayReady() {
 	systray.SetIcon(trayIcon(false))
-	systray.SetTooltip("SpAC3DPI — DPI Bypass")
+	systray.SetTooltip("LunaProxy — DPI Bypass")
 
 	mOpen := systray.AddMenuItem("Arayüzü Aç", "Pencereyi göster")
 	systray.AddSeparator()
 	trayStart = systray.AddMenuItem("Başlat", "Proxy'yi başlat")
 	trayStop = systray.AddMenuItem("Durdur", "Proxy'yi durdur")
 	trayStop.Hide()
+	systray.AddSeparator()
+	mUpdate := systray.AddMenuItem("Güncellemeleri Kontrol Et", "GitHub'da yeni sürüm ara")
 	systray.AddSeparator()
 	mQuit := systray.AddMenuItem("Çıkış", "Programı kapat")
 
@@ -44,6 +46,22 @@ func onTrayReady() {
 				g.stop()
 				updateTrayState(false)
 				pushStatus()
+			case <-mUpdate.ClickedCh:
+				go func() {
+					tag, url, err := CheckUpdate()
+					if err != nil {
+						logWarn("Güncelleme kontrolü başarısız: " + err.Error())
+						return
+					}
+					if tag != "" {
+						pendingUpdateTag.Store(tag)
+						pendingUpdateURL.Store(url)
+						pushStatus()
+						showWindow()
+					} else {
+						logInfo("Güncel sürüm kullanılıyor: " + Version)
+					}
+				}()
 			case <-mQuit.ClickedCh:
 				appExiting = true
 				g.shutdown()
