@@ -8,11 +8,11 @@ tüm cihazlara (telefon, tablet) PAC URL ile şeffaf bypass sağlar.
 
 ## Build
 ```powershell
-go build -tags withbundle -o SpAC3DPI.exe .
+go build -tags withbundle -ldflags "-H windowsgui" -o SpAC3DPI.exe .
 ```
 Test build (bundle olmadan):
 ```powershell
-go build -o SpAC3DPI.exe .
+go build -ldflags "-H windowsgui" -o SpAC3DPI.exe .
 ```
 
 ## Dosya Haritası (v1)

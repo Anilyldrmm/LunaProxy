@@ -6,8 +6,9 @@ import (
 	"bytes"
 	"image"
 	"image/png"
+	"os"
 
-	"github.com/getlantern/systray"
+	"fyne.io/systray"
 )
 
 var (
@@ -50,6 +51,7 @@ func onTrayReady() {
 				appExiting = true
 				g.shutdown()
 				systray.Quit()
+				os.Exit(0)
 			}
 		}
 	}()
