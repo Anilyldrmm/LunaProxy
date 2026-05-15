@@ -5,9 +5,65 @@ import (
 	"io"
 	"net"
 	"net/http"
+	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 )
+
+// ── Per-IP cihaz takibi ──────────────────────────────────────────────────────
+
+type deviceEntry struct {
+	Bytes       int64
+	ActiveConns int64
+}
+
+var devices sync.Map // key: string IP, value: *deviceEntry
+
+// DeviceInfo — UI'a gönderilen cihaz bilgisi.
+type DeviceInfo struct {
+	IP          string `json:"ip"`
+	Bytes       int64  `json:"bytes"`
+	ActiveConns int64  `json:"activeConns"`
+}
+
+func trackDevice(ip string, bytes int64) {
+	v, _ := devices.LoadOrStore(ip, &deviceEntry{})
+	e := v.(*deviceEntry)
+	atomic.AddInt64(&e.Bytes, bytes)
+}
+
+func incDeviceConn(ip string) {
+	v, _ := devices.LoadOrStore(ip, &deviceEntry{})
+	atomic.AddInt64(&v.(*deviceEntry).ActiveConns, 1)
+}
+
+func decDeviceConn(ip string) {
+	if v, ok := devices.Load(ip); ok {
+		atomic.AddInt64(&v.(*deviceEntry).ActiveConns, -1)
+	}
+}
+
+func GetDevices() []DeviceInfo {
+	var list []DeviceInfo
+	devices.Range(func(k, v any) bool {
+		e := v.(*deviceEntry)
+		list = append(list, DeviceInfo{
+			IP:          k.(string),
+			Bytes:       atomic.LoadInt64(&e.Bytes),
+			ActiveConns: atomic.LoadInt64(&e.ActiveConns),
+		})
+		return true
+	})
+	return list
+}
+
+func remoteIP(addr string) string {
+	if i := strings.LastIndex(addr, ":"); i >= 0 {
+		return addr[:i]
+	}
+	return addr
+}
 
 var hopByHop = []string{
 	"Connection", "Keep-Alive", "Proxy-Authenticate", "Proxy-Authorization",
@@ -71,7 +127,10 @@ func proxyHandler(w http.ResponseWriter, r *http.Request) {
 
 func handleConnect(w http.ResponseWriter, r *http.Request) {
 	stats.incConn()
+	ip := remoteIP(r.RemoteAddr)
+	incDeviceConn(ip)
 	defer stats.decConn()
+	defer decDeviceConn(ip)
 
 	dst, err := net.DialTimeout("tcp", r.Host, 15*time.Second)
 	if err != nil {
@@ -103,6 +162,7 @@ func handleConnect(w http.ResponseWriter, r *http.Request) {
 		n, _ := io.CopyBuffer(dst, rw, *buf)
 		bufPool.Put(buf)
 		stats.addBytes(n)
+		trackDevice(ip, n)
 		dst.Close()
 	}()
 	go func() {
@@ -111,6 +171,7 @@ func handleConnect(w http.ResponseWriter, r *http.Request) {
 		n, _ := io.CopyBuffer(src, dst, *buf)
 		bufPool.Put(buf)
 		stats.addBytes(n)
+		trackDevice(ip, n)
 		src.Close()
 	}()
 	wg.Wait()
@@ -123,7 +184,10 @@ func handleHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 
 	stats.incConn()
+	ip := remoteIP(r.RemoteAddr)
+	incDeviceConn(ip)
 	defer stats.decConn()
+	defer decDeviceConn(ip)
 
 	out := r.Clone(r.Context())
 	out.RequestURI = ""
@@ -153,4 +217,5 @@ func handleHTTP(w http.ResponseWriter, r *http.Request) {
 	n, _ := io.CopyBuffer(w, resp.Body, *buf)
 	bufPool.Put(buf)
 	stats.addBytes(n)
+	trackDevice(ip, n)
 }
