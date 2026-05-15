@@ -3,6 +3,7 @@ package main
 import (
 	_ "embed"
 	"bytes"
+	"encoding/base64"
 	"encoding/binary"
 	"image"
 	"image/color"
@@ -300,4 +301,9 @@ func getLogoBitmap(active bool) *walk.Bitmap {
 		bmpLogoDefault = loadLogoBitmap(false)
 	}
 	return bmpLogoDefault
+}
+
+// logoBase64 — PNG logoyu base64 olarak döndürür (WebView2 logo inject için).
+func logoBase64() string {
+	return base64.StdEncoding.EncodeToString(rawLogoBytes)
 }

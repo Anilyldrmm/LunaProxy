@@ -62,10 +62,6 @@ func openBrowser(url string) {
 	hiddenRun("rundll32", "url.dll,FileProtocolHandler", url)
 }
 
-func makeIconPNG(active bool) []byte {
-	return makeICOBytes(active) // ICO baytları döner; eski çağrıcılar için tutuldu
-}
-
 // writeTempPNG — QR PNG için yardımcı
 func writeTempPNG(data []byte) (path string, cleanup func()) {
 	f, err := os.CreateTemp("", "spac3dpi_*.png")

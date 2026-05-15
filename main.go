@@ -55,7 +55,13 @@ func main() {
 		g.pacPort = c.PACPort
 	}
 
-	runUI() // walk mesaj döngüsü — çıkana kadar bloklar
+	initTray()
+
+	StartUpdateChecker(func(tag string) {
+		pendingUpdateTag.Store(tag)
+	})
+
+	initWindow() // WebView2 mesaj döngüsü — çıkana kadar bloklar
 }
 
 // ── Uygulama yaşam döngüsü ────────────────────────────────────────────────────
