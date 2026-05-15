@@ -122,17 +122,23 @@ func sshRun(client *ssh.Client, cmd string) (string, error) {
 	return strings.TrimSpace(string(out)), err
 }
 
-func sshWriteFile(client *ssh.Client, path, content string) error {
+// sshWriteFile — dosyayı stdin→cat ile router'a yazar.
+// sudo != "" ise sudo tee kullanır (non-root kullanıcılar için).
+func sshWriteFile(client *ssh.Client, path, content, sudo string) error {
 	session, err := client.NewSession()
 	if err != nil {
 		return err
 	}
 	defer session.Close()
 	session.Stdin = strings.NewReader(content)
-	return session.Run(fmt.Sprintf("cat > %s", path))
+	if sudo == "" {
+		return session.Run(fmt.Sprintf("cat > '%s'", path))
+	}
+	// sudo tee ile yaz; stdout discard et
+	return session.Run(fmt.Sprintf("%stee '%s' > /dev/null", sudo, path))
 }
 
-// ── Tespit ──────────────────────────────────────────────────────────────────
+// ── Tespit fonksiyonları ─────────────────────────────────────────────────────
 
 func isOpenWrt(client *ssh.Client) bool {
 	out, err := sshRun(client, "head -1 /etc/openwrt_release 2>/dev/null")
@@ -149,17 +155,45 @@ func hasLighttpd(client *ssh.Client) bool {
 	return err == nil
 }
 
-// hasBusyboxHTTPD — busybox binary'sinin varlığını kontrol eder.
-// Çoğu consumer router'da busybox bulunur ve httpd applet'i içerir.
+// findHTTPD — sistem genelinde httpd binary'sini arar.
+// Birçok consumer router'da BusyBox httpd, /usr/sbin/httpd veya /bin/httpd olarak bulunur.
+// Binary yolunu ve bulunup bulunmadığını döner.
+func findHTTPD(client *ssh.Client) (string, bool) {
+	out, _ := sshRun(client,
+		"which httpd 2>/dev/null || "+
+			"ls /usr/sbin/httpd /usr/bin/httpd /bin/httpd /sbin/httpd 2>/dev/null | head -1")
+	out = strings.TrimSpace(out)
+	if out != "" && strings.Contains(out, "httpd") {
+		return out, true
+	}
+	return "", false
+}
+
+// hasBusyboxHTTPD — busybox binary'si httpd applet içeriyor mu?
+// findHTTPD'den önce düşer; busybox'u 'busybox httpd' şeklinde çağırır.
 func hasBusyboxHTTPD(client *ssh.Client) bool {
-	out, _ := sshRun(client, "ls /bin/busybox 2>/dev/null || which busybox 2>/dev/null")
-	return strings.Contains(out, "busybox")
+	out, _ := sshRun(client, "which busybox 2>/dev/null || ls /bin/busybox 2>/dev/null")
+	if !strings.Contains(out, "busybox") {
+		return false
+	}
+	applets, _ := sshRun(client, "busybox --list 2>/dev/null")
+	return strings.Contains(applets, "httpd")
+}
+
+// getSudoPrefix — SSH kullanıcısı root değilse "sudo " döner.
+// Yönetici kullanıcı root yetkisiyle SSH açmışsa boş döner.
+func getSudoPrefix(client *ssh.Client) string {
+	out, _ := sshRun(client, "id -u")
+	if strings.TrimSpace(out) == "0" {
+		return ""
+	}
+	return "sudo "
 }
 
 // ── Ana kurulum fonksiyonu ───────────────────────────────────────────────────
 
 // RouterInstall — SSH üzerinden router'a PAC+heartbeat scriptlerini kurar.
-// Sunucu önceliği: lighttpd (Entware) → BusyBox httpd (consumer router).
+// Sunucu önceliği: lighttpd (Entware) → sistem httpd → BusyBox httpd → hata.
 // Tüm CGI scriptler cgi-bin/ altına yazılır; URL: /cgi-bin/proxy.pac vb.
 func RouterInstall(cfg RouterSetupCfg, progress func(RouterStep)) error {
 	progress(RouterStep{"Router'a bağlanılıyor...", "info"})
@@ -170,31 +204,43 @@ func RouterInstall(cfg RouterSetupCfg, progress func(RouterStep)) error {
 	defer client.Close()
 	progress(RouterStep{"SSH bağlantısı kuruldu", "ok"})
 
+	// Yetki kontrolü — root değilse sudo prefix kullan
+	sudo := getSudoPrefix(client)
+	if sudo != "" {
+		progress(RouterStep{"sudo ile admin yetkileriyle devam ediliyor", "info"})
+	}
+
 	if isOpenWrt(client) {
 		progress(RouterStep{"OpenWrt tespit edildi", "ok"})
 	} else {
 		progress(RouterStep{"Linux tabanlı firmware — devam ediliyor", "info"})
 	}
 
-	useLighttpd := hasLighttpd(client)
-	if !useLighttpd {
-		if hasEntware(client) {
-			progress(RouterStep{"lighttpd kuruluyor (opkg)...", "info"})
-			if out, err := sshRun(client, "opkg update && opkg install lighttpd"); err != nil {
-				return fmt.Errorf("lighttpd kurulamadı: %s", out)
-			}
-			progress(RouterStep{"lighttpd kuruldu", "ok"})
-			useLighttpd = true
-		} else if hasBusyboxHTTPD(client) {
-			progress(RouterStep{"BusyBox httpd kullanılacak", "info"})
-		} else {
-			return fmt.Errorf("HTTP sunucu bulunamadı — lighttpd veya BusyBox gerekli")
-		}
-	} else {
+	// HTTP sunucu seçimi
+	useLighttpd := false
+	httpdBin := "" // "busybox httpd" veya "/usr/sbin/httpd" gibi komut
+
+	if hasLighttpd(client) {
+		useLighttpd = true
 		progress(RouterStep{"lighttpd mevcut", "ok"})
+	} else if hasEntware(client) {
+		progress(RouterStep{"lighttpd kuruluyor (opkg)...", "info"})
+		if out, err := sshRun(client, "opkg update && opkg install lighttpd"); err != nil {
+			return fmt.Errorf("lighttpd kurulamadı: %s", out)
+		}
+		useLighttpd = true
+		progress(RouterStep{"lighttpd kuruldu", "ok"})
+	} else if bin, ok := findHTTPD(client); ok {
+		httpdBin = bin
+		progress(RouterStep{"httpd tespit edildi: " + bin, "info"})
+	} else if hasBusyboxHTTPD(client) {
+		httpdBin = "busybox httpd"
+		progress(RouterStep{"BusyBox httpd kullanılacak", "info"})
+	} else {
+		return fmt.Errorf("HTTP sunucu bulunamadı — router'da httpd, lighttpd veya BusyBox gerekli")
 	}
 
-	// Entware varsa kalıcı /opt/share/pac, yoksa /tmp/pac (reboot'ta sıfırlanır)
+	// Dizin yapısı: lighttpd→/opt/share/pac, diğerleri→/tmp/pac
 	pacDir := "/opt/share/pac"
 	if !hasEntware(client) {
 		pacDir = "/tmp/pac"
@@ -202,11 +248,11 @@ func RouterInstall(cfg RouterSetupCfg, progress func(RouterStep)) error {
 	cgiDir := pacDir + "/cgi-bin"
 
 	progress(RouterStep{"Dosyalar oluşturuluyor...", "info"})
-	if _, err := sshRun(client, "mkdir -p "+cgiDir); err != nil {
+	if _, err := sshRun(client, sudo+"mkdir -p '"+cgiDir+"'"); err != nil {
 		return fmt.Errorf("dizin oluşturulamadı: %w", err)
 	}
 
-	// CGI scriptleri cgi-bin/ altına yaz (lighttpd ext-match ve BusyBox cgi-bin kuralı)
+	// CGI scriptleri cgi-bin/ altına yaz (lighttpd ext-match + BusyBox cgi-bin kuralı)
 	files := []struct {
 		path    string
 		content string
@@ -231,40 +277,46 @@ func RouterInstall(cfg RouterSetupCfg, progress func(RouterStep)) error {
 		}{"/opt/etc/init.d/S80spac3dpi", routerInitScript, true})
 	}
 	for _, f := range files {
-		if err := sshWriteFile(client, f.path, f.content); err != nil {
+		if err := sshWriteFile(client, f.path, f.content, sudo); err != nil {
 			return fmt.Errorf("%s yazılamadı: %w", f.path, err)
 		}
 		if f.exec {
-			if _, err := sshRun(client, fmt.Sprintf("chmod +x '%s'", f.path)); err != nil {
+			if _, err := sshRun(client, sudo+fmt.Sprintf("chmod +x '%s'", f.path)); err != nil {
 				return fmt.Errorf("%s için chmod başarısız: %w", f.path, err)
 			}
 		}
 	}
 	progress(RouterStep{"Scriptler yazıldı", "ok"})
 
+	// Eski sunucu süreçlerini durdur — sadece 8090 portundakileri
+	sshRun(client, sudo+"fuser -k 8090/tcp 2>/dev/null; true")
+	time.Sleep(300 * time.Millisecond)
+
 	if useLighttpd {
-		lighttpdBin := "lighttpd"
+		// lighttpd binary konumunu bul
+		lighttpdBin := "/opt/bin/lighttpd"
 		if out, _ := sshRun(client, "which lighttpd 2>/dev/null"); out != "" {
 			lighttpdBin = out
-		} else if _, err := sshRun(client, "ls /opt/bin/lighttpd 2>/dev/null"); err == nil {
-			lighttpdBin = "/opt/bin/lighttpd"
 		}
-		sshRun(client, `if [ -f /tmp/spac3dpi_lighttpd.pid ]; then kill $(cat /tmp/spac3dpi_lighttpd.pid) 2>/dev/null; sleep 1; fi`)
-		if out, err := sshRun(client, lighttpdBin+" -f '"+pacDir+"/lighttpd.conf'"); err != nil {
+		// Eski lighttpd PID dosyasını temizle
+		sshRun(client, sudo+`sh -c 'if [ -f /tmp/spac3dpi_lighttpd.pid ]; then kill $(cat /tmp/spac3dpi_lighttpd.pid) 2>/dev/null; sleep 1; fi'`)
+		if out, err := sshRun(client, sudo+lighttpdBin+" -f '"+pacDir+"/lighttpd.conf'"); err != nil {
 			return fmt.Errorf("lighttpd başlatılamadı: %s", out)
 		}
 		progress(RouterStep{"lighttpd başlatıldı (port 8090)", "ok"})
 	} else {
-		// BusyBox httpd — portu serbest bırak, sonra başlat
-		sshRun(client, "fuser -k 8090/tcp 2>/dev/null; killall -q httpd 2>/dev/null; true")
-		time.Sleep(300 * time.Millisecond)
-		if out, err := sshRun(client, "busybox httpd -p 8090 -h '"+pacDir+"'"); err != nil {
-			return fmt.Errorf("BusyBox httpd başlatılamadı: %s", out)
+		// httpd veya busybox httpd — arka planda başlat
+		startCmd := fmt.Sprintf("nohup %s -p 8090 -h '%s' >/dev/null 2>&1 &", httpdBin, pacDir)
+		if _, err := sshRun(client, sudo+startCmd); err != nil {
+			// nohup yoksa basit arka plan
+			if out, err2 := sshRun(client, sudo+httpdBin+" -p 8090 -h '"+pacDir+"' &"); err2 != nil {
+				return fmt.Errorf("httpd başlatılamadı: %s", out)
+			}
 		}
-		progress(RouterStep{"BusyBox httpd başlatıldı (port 8090)", "ok"})
+		progress(RouterStep{"httpd başlatıldı (port 8090)", "ok"})
 	}
 
-	time.Sleep(500 * time.Millisecond)
+	time.Sleep(800 * time.Millisecond)
 	testURL := fmt.Sprintf("http://%s:8090/cgi-bin/proxy.pac", cfg.Host)
 	resp, err := (&http.Client{Timeout: 5 * time.Second}).Get(testURL)
 	if err != nil {

@@ -3,9 +3,6 @@
 package main
 
 import (
-	"bytes"
-	"image"
-	"image/png"
 	"os"
 
 	"fyne.io/systray"
@@ -21,7 +18,7 @@ func initTray() {
 }
 
 func onTrayReady() {
-	systray.SetIcon(makeIconPNG(false))
+	systray.SetIcon(trayIcon(false))
 	systray.SetTooltip("SpAC3DPI — DPI Bypass")
 
 	mOpen := systray.AddMenuItem("Arayüzü Aç", "Pencereyi göster")
@@ -61,7 +58,7 @@ func onTrayExit() {}
 
 // updateTrayState — proxy durumuna göre tray ikonunu ve menüsünü günceller.
 func updateTrayState(running bool) {
-	systray.SetIcon(makeIconPNG(running))
+	systray.SetIcon(trayIcon(running))
 	if running {
 		trayStart.Hide()
 		trayStop.Show()
@@ -71,22 +68,7 @@ func updateTrayState(running bool) {
 	}
 }
 
-// makeIconPNG — tray için 32×32 PNG ikonu üretir (yeşil/kırmızı durum noktası ile).
-func makeIconPNG(active bool) []byte {
-	src, err := png.Decode(bytes.NewReader(rawLogoBytes))
-	if err != nil {
-		return rawLogoBytes
-	}
-	if !active {
-		src = dimLogo(src)
-	}
-	resized := resizeLogo(src, 32)
-	drawStatusDot(resized, 32, active)
-	return encodePNG(resized)
-}
-
-func encodePNG(img image.Image) []byte {
-	var buf bytes.Buffer
-	png.Encode(&buf, img)
-	return buf.Bytes()
+// trayIcon — Windows systray için ICO formatı döner (PNG yerine ICO daha güvenilir).
+func trayIcon(active bool) []byte {
+	return makeTrayICOBytes(active)
 }

@@ -39,6 +39,7 @@ func handleIPCMessage(data string) {
 				evalJS(fmt.Sprintf(`showError(%s)`, jsonEscape(err.Error())))
 			}
 		}
+		updateTrayState(g.running)
 		pushStatus()
 
 	case "saveSettings":
