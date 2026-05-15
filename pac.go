@@ -58,9 +58,9 @@ func pushRouterPAC(localIP, mode string, proxyPort int) {
 	gateway := guessGatewayIP(localIP)
 	var url string
 	if mode == "proxy" {
-		url = fmt.Sprintf("http://%s:8090/update.sh?mode=proxy&ip=%s&port=%d", gateway, localIP, proxyPort)
+		url = fmt.Sprintf("http://%s:8090/cgi-bin/update.sh?mode=proxy&ip=%s&port=%d", gateway, localIP, proxyPort)
 	} else {
-		url = fmt.Sprintf("http://%s:8090/update.sh?mode=direct", gateway)
+		url = fmt.Sprintf("http://%s:8090/cgi-bin/update.sh?mode=direct", gateway)
 	}
 	client := &http.Client{Timeout: 5 * time.Second}
 	for i := 0; i < 3; i++ {
@@ -107,7 +107,7 @@ func buildPACMux(localIP string, port int) *http.ServeMux {
 	setupURL := fmt.Sprintf("http://%s:%d/setup", localIP, port)
 	_ = setupURL
 
-	routerPACURL := fmt.Sprintf("http://%s:8090/proxy.pac", guessGatewayIP(localIP))
+	routerPACURL := fmt.Sprintf("http://%s:8090/cgi-bin/proxy.pac", guessGatewayIP(localIP))
 
 	mux.HandleFunc("/setup", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")

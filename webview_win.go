@@ -137,13 +137,17 @@ func wvSetTaskbarIcon(hwnd uintptr) {
 	}
 	const imageIcon = 1
 	const lrLoadFromFile = 0x10
-	hIcon, _, _ := wvProcLoadImage.Call(0, uintptr(unsafe.Pointer(path16)), imageIcon, 0, 0, lrLoadFromFile)
-	if hIcon == 0 {
+	const wmSetIcon = 0x0080
+	hSmall, _, _ := wvProcLoadImage.Call(0, uintptr(unsafe.Pointer(path16)), imageIcon, 16, 16, lrLoadFromFile)
+	hBig, _, _ := wvProcLoadImage.Call(0, uintptr(unsafe.Pointer(path16)), imageIcon, 32, 32, lrLoadFromFile)
+	if hBig == 0 {
 		return
 	}
-	const wmSetIcon = 0x0080
-	wvProcSendMessage.Call(hwnd, wmSetIcon, 0, hIcon) // ICON_SMALL
-	wvProcSendMessage.Call(hwnd, wmSetIcon, 1, hIcon) // ICON_BIG
+	if hSmall == 0 {
+		hSmall = hBig
+	}
+	wvProcSendMessage.Call(hwnd, wmSetIcon, 0, hSmall) // ICON_SMALL (taskbar, 16px)
+	wvProcSendMessage.Call(hwnd, wmSetIcon, 1, hBig)   // ICON_BIG (alt-tab, 32px)
 }
 
 // showWindow — pencereyi göster (tray'den çağrılır).

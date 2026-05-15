@@ -22,7 +22,7 @@ func startRouterHeartbeat(gateway string) {
 	hbStop = stop
 	hbMu.Unlock()
 
-	url := "http://" + gateway + ":8090/hb.sh"
+	url := "http://" + gateway + ":8090/cgi-bin/hb.sh"
 	client := &http.Client{Timeout: 3 * time.Second}
 
 	go func() {
