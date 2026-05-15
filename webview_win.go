@@ -1,10 +1,11 @@
-//go:build windows
+﻿//go:build windows
 
 package main
 
 import (
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 	"syscall"
 	"unsafe"
@@ -59,13 +60,17 @@ var wv webview.WebView
 // initWindow — WebView2 penceresini oluşturur, frameless yapar ve çalıştırır.
 // Bu fonksiyon main goroutine'de çağrılmalı; bloklar (Run() içerir).
 func initWindow() {
-	wv = webview.New(false)
+	dataPath := filepath.Join(os.Getenv("LOCALAPPDATA"), "LunaProxy", "WebView2")
+	wv = webview.NewWithOptions(webview.WebViewOptions{
+		Debug:    false,
+		DataPath: dataPath,
+	})
 	if wv == nil {
 		panic("WebView2 oluşturulamadı — Edge WebView2 Runtime kurulu mu?")
 	}
 	defer wv.Destroy()
 
-	wv.SetTitle("SpAC3DPI")
+	wv.SetTitle("LunaProxy")
 	wv.SetSize(400, 640, webview.HintFixed)
 
 	hwnd := uintptr(wv.Window())
@@ -131,7 +136,7 @@ func wvSetTaskbarIcon(hwnd uintptr) {
 		return
 	}
 
-	f, err := os.CreateTemp("", "spac3dpi_*.ico")
+	f, err := os.CreateTemp("", "lunaproxy_*.ico")
 	if err != nil {
 		return
 	}
