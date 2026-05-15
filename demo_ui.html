@@ -1,0 +1,780 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="UTF-8">
+<title>SpAC3DPI — UI Demo</title>
+<style>
+:root {
+  --bg: #0D0B14;
+  --surface: #13101E;
+  --surface2: #1A1628;
+  --surface3: #221C38;
+  --accent: #8B3FBF;
+  --accent-bright: #A855F7;
+  --accent-glow: #C084FC;
+  --green: #22C55E;
+  --red: #EF4444;
+  --text: #F1F0F5;
+  --sub: #6B6490;
+  --border: #2A2240;
+}
+* { margin:0; padding:0; box-sizing:border-box; }
+body {
+  background: radial-gradient(ellipse at 50% 40%, #1a1035 0%, #08060f 100%);
+  display:flex; align-items:center; justify-content:center;
+  min-height:100vh;
+  font-family:'Segoe UI',system-ui,sans-serif;
+}
+
+/* ── Window ── */
+.app-window {
+  width:400px; height:640px;
+  background:var(--bg);
+  border-radius:14px;
+  overflow:hidden;
+  display:flex; flex-direction:column;
+  box-shadow:
+    0 0 0 1px var(--border),
+    0 24px 80px rgba(0,0,0,.85),
+    0 0 100px rgba(139,63,191,.18);
+  position:relative;
+}
+
+/* ── Titlebar ── */
+.titlebar {
+  height:44px; flex-shrink:0;
+  background:var(--surface);
+  border-bottom:1px solid var(--border);
+  display:flex; align-items:center; padding:0 10px; gap:10px;
+  user-select:none; cursor:default;
+}
+.tb-logo {
+  width:28px; height:28px; border-radius:8px; flex-shrink:0;
+  background:linear-gradient(135deg,#8B3FBF,#6B21A8);
+  display:flex; align-items:center; justify-content:center;
+  font-weight:900; font-size:15px; color:#fff;
+  box-shadow:0 0 14px rgba(168,85,247,.5);
+  font-style:italic;
+}
+.tb-name { font-size:13px; font-weight:700; color:var(--text); }
+.tb-sub  { font-size:10px; color:var(--sub); }
+.tb-spacer { flex:1; }
+.tb-btn {
+  width:28px; height:28px; border-radius:7px;
+  display:flex; align-items:center; justify-content:center;
+  cursor:pointer; color:var(--sub); font-size:13px;
+  transition:background .15s,color .15s;
+}
+.tb-btn:hover { background:rgba(255,255,255,.08); color:var(--text); }
+.tb-btn.close:hover { background:var(--red); color:#fff; }
+
+/* ── Layout ── */
+.main { display:flex; flex:1; overflow:hidden; }
+
+/* ── Sidebar ── */
+.sidebar {
+  width:56px; flex-shrink:0;
+  background:var(--surface);
+  border-right:1px solid var(--border);
+  display:flex; flex-direction:column; align-items:center;
+  padding:10px 0; gap:4px;
+}
+.nav {
+  width:40px; height:40px; border-radius:10px;
+  display:flex; align-items:center; justify-content:center;
+  cursor:pointer; color:var(--sub);
+  transition:background .15s,color .15s,box-shadow .15s;
+  position:relative;
+}
+.nav:hover { background:rgba(168,85,247,.1); color:var(--accent-glow); }
+.nav.active {
+  background:rgba(139,63,191,.2); color:var(--accent-bright);
+  box-shadow:inset 3px 0 0 var(--accent-bright);
+}
+.nav svg { width:20px; height:20px; }
+.tooltip {
+  position:absolute; left:48px;
+  background:var(--surface3); border:1px solid var(--border);
+  color:var(--text); font-size:11px; font-weight:600;
+  padding:4px 10px; border-radius:7px; white-space:nowrap;
+  opacity:0; pointer-events:none; transition:opacity .15s;
+  z-index:99;
+}
+.nav:hover .tooltip { opacity:1; }
+
+/* ── Content ── */
+.content {
+  flex:1; overflow-y:auto; overflow-x:hidden;
+  scrollbar-width:thin; scrollbar-color:var(--border) transparent;
+}
+.content::-webkit-scrollbar { width:4px; }
+.content::-webkit-scrollbar-thumb { background:var(--border); border-radius:2px; }
+
+.panel { display:none; padding:16px; animation:panelIn .2s ease; }
+.panel.active { display:block; }
+@keyframes panelIn {
+  from { opacity:0; transform:translateX(8px); }
+  to   { opacity:1; transform:translateX(0); }
+}
+
+/* ── Cards ── */
+.card {
+  background:var(--surface); border:1px solid var(--border);
+  border-radius:12px; padding:14px; margin-bottom:10px;
+}
+.card-title {
+  font-size:10px; text-transform:uppercase; letter-spacing:1.2px;
+  color:var(--sub); font-weight:600; margin-bottom:12px;
+}
+.kv { display:flex; justify-content:space-between; align-items:center; padding:3px 0; }
+.kv-k { font-size:12px; color:var(--sub); }
+.kv-v { font-size:12px; color:var(--text); font-family:Consolas,monospace; font-weight:500; }
+.kv-v.ok  { color:var(--green); }
+.kv-v.sub { color:var(--sub); }
+.kv-v.acc { color:var(--accent-bright); }
+
+/* ── STATUS panel ── */
+.hero { display:flex; flex-direction:column; align-items:center; padding:20px 0 16px; }
+.logo-wrap { position:relative; width:84px; height:84px; margin-bottom:14px; }
+.logo-ring {
+  position:absolute; inset:-7px; border-radius:27px;
+  border:2px solid transparent;
+  transition:border-color .4s,box-shadow .4s;
+}
+.logo-ring.on {
+  border-color:rgba(168,85,247,.5);
+  box-shadow:0 0 28px rgba(139,63,191,.4);
+  animation:ringPulse 2.5s ease-in-out infinite;
+}
+@keyframes ringPulse {
+  0%,100% { box-shadow:0 0 14px rgba(139,63,191,.25); border-color:rgba(168,85,247,.3); }
+  50%      { box-shadow:0 0 36px rgba(139,63,191,.6); border-color:rgba(168,85,247,.7); }
+}
+.logo-box {
+  width:84px; height:84px; border-radius:20px;
+  background:linear-gradient(135deg,#8B3FBF 0%,#6B21A8 100%);
+  display:flex; align-items:center; justify-content:center;
+  font-size:44px; font-weight:900; font-style:italic; color:#fff;
+  position:relative; overflow:hidden;
+  transition:box-shadow .4s;
+}
+.logo-box.on {
+  box-shadow:0 0 0 2px rgba(168,85,247,.35),0 10px 40px rgba(139,63,191,.6);
+}
+.logo-box::after {
+  content:''; position:absolute; inset:0;
+  background:radial-gradient(circle at 35% 35%,rgba(255,255,255,.18) 0%,transparent 70%);
+}
+/* pixel glitch dots on logo */
+.logo-box .px { position:absolute; border-radius:1px; opacity:.7; }
+
+.status-title { font-size:17px; font-weight:700; color:var(--text); margin-bottom:6px; }
+.dot-row { display:flex; align-items:center; gap:6px; margin-bottom:6px; }
+.dot {
+  width:8px; height:8px; border-radius:50%; background:var(--red);
+  transition:background .3s;
+}
+.dot.on { background:var(--green); box-shadow:0 0 8px var(--green); animation:dotPulse 2s ease-in-out infinite; }
+@keyframes dotPulse {
+  0%,100% { box-shadow:0 0 4px var(--green); }
+  50%      { box-shadow:0 0 14px var(--green); }
+}
+.status-label { font-size:13px; font-weight:700; color:var(--sub); transition:color .3s; }
+.status-label.on { color:var(--green); }
+.ip-label { font-size:11px; color:var(--sub); font-family:Consolas,monospace; transition:opacity .3s; }
+
+/* Toggle button */
+.toggle-btn {
+  width:100%; height:50px; border-radius:50px; border:none;
+  background:linear-gradient(135deg,#8B3FBF,#6B21A8);
+  color:#fff; font-size:14px; font-weight:700; letter-spacing:.5px;
+  cursor:pointer; display:flex; align-items:center; justify-content:center; gap:9px;
+  transition:all .2s; margin-bottom:16px;
+  box-shadow:0 4px 22px rgba(139,63,191,.45);
+}
+.toggle-btn:hover { transform:translateY(-2px); box-shadow:0 8px 34px rgba(139,63,191,.65); }
+.toggle-btn:active { transform:translateY(0); }
+.toggle-btn.stop {
+  background:linear-gradient(135deg,#DC2626,#991B1B);
+  box-shadow:0 4px 22px rgba(239,68,68,.4);
+}
+.toggle-btn.stop:hover { box-shadow:0 8px 34px rgba(239,68,68,.55); }
+
+/* Stats */
+.stats { display:flex; justify-content:space-around; margin-bottom:14px; }
+.stat { display:flex; flex-direction:column; align-items:center; gap:3px; }
+.stat-v { font-size:17px; font-weight:700; color:var(--text); font-family:Consolas,monospace; }
+.stat-l { font-size:9px; text-transform:uppercase; letter-spacing:.9px; color:var(--sub); }
+
+/* svc bar */
+.svc-bar {
+  display:flex; flex-wrap:wrap; gap:10px;
+  padding:10px 0; border-top:1px solid var(--border); border-bottom:1px solid var(--border);
+  margin-bottom:14px;
+}
+.svc { display:flex; align-items:center; gap:4px; font-size:11px; color:var(--sub); }
+.sdot { width:6px; height:6px; border-radius:50%; background:var(--red); }
+.sdot.ok { background:var(--green); box-shadow:0 0 5px var(--green); }
+
+/* ── DEVICES panel ── */
+.ph { display:flex; align-items:center; justify-content:space-between; margin-bottom:14px; }
+.ph-title { font-size:15px; font-weight:700; color:var(--text); }
+.ph-badge {
+  font-size:11px; font-weight:600; color:var(--accent-bright);
+  background:rgba(168,85,247,.15); padding:3px 10px; border-radius:20px;
+}
+.device {
+  background:var(--surface); border:1px solid var(--border); border-radius:10px;
+  padding:12px; margin-bottom:8px;
+  display:flex; align-items:center; gap:12px;
+  transition:border-color .15s;
+  animation:slideIn .3s ease;
+}
+@keyframes slideIn {
+  from { opacity:0; transform:translateY(-6px); }
+  to   { opacity:1; transform:translateY(0); }
+}
+.device:hover { border-color:rgba(168,85,247,.35); }
+.dev-icon {
+  width:36px; height:36px; border-radius:9px;
+  background:rgba(139,63,191,.2);
+  display:flex; align-items:center; justify-content:center; flex-shrink:0;
+  color:var(--accent-bright);
+}
+.dev-icon svg { width:18px; height:18px; }
+.dev-ip   { font-size:13px; font-weight:600; color:var(--text); font-family:Consolas,monospace; }
+.dev-meta { font-size:11px; color:var(--sub); margin-top:2px; }
+.dev-right { text-align:right; }
+.dev-data  { font-size:12px; font-weight:700; color:var(--accent-bright); font-family:Consolas,monospace; }
+.dev-conns { font-size:10px; color:var(--sub); margin-top:2px; }
+.adot {
+  width:7px; height:7px; border-radius:50%; background:var(--green); flex-shrink:0;
+  box-shadow:0 0 7px var(--green);
+  animation:dotPulse 2s ease-in-out infinite;
+}
+.empty {
+  display:flex; flex-direction:column; align-items:center;
+  padding:48px 0; color:var(--sub); gap:10px;
+}
+.empty svg { width:40px; height:40px; opacity:.35; }
+.empty p { font-size:13px; }
+
+/* ── SETTINGS panel ── */
+.s-label { font-size:10px; text-transform:uppercase; letter-spacing:.8px; color:var(--sub); font-weight:600; margin-bottom:6px; }
+.s-select {
+  width:100%; background:var(--surface2); border:1px solid var(--border);
+  border-radius:8px; color:var(--text); padding:9px 12px; font-size:13px;
+  font-family:inherit; outline:none; appearance:none; cursor:pointer;
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%236B6490' stroke-width='2'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
+  background-repeat:no-repeat; background-position:right 12px center;
+  margin-bottom:12px;
+}
+.s-select:focus { border-color:var(--accent); }
+.s-input {
+  width:100%; background:var(--surface2); border:1px solid var(--border);
+  border-radius:8px; color:var(--text); padding:9px 12px; font-size:13px;
+  font-family:Consolas,monospace; outline:none; margin-bottom:12px;
+}
+.s-input:focus { border-color:var(--accent); }
+.radio-group { display:flex; flex-direction:column; gap:5px; margin-bottom:4px; }
+.radio-item {
+  display:flex; align-items:center; gap:10px; padding:8px 10px;
+  border-radius:8px; cursor:pointer; border:1px solid transparent;
+  transition:all .15s;
+}
+.radio-item:hover { background:rgba(168,85,247,.08); }
+.radio-item.sel { background:rgba(139,63,191,.15); border-color:rgba(139,63,191,.4); }
+.rdot {
+  width:16px; height:16px; border-radius:50%; border:2px solid var(--border);
+  display:flex; align-items:center; justify-content:center; flex-shrink:0;
+  transition:border-color .15s;
+}
+.radio-item.sel .rdot { border-color:var(--accent-bright); }
+.radio-item.sel .rdot::after {
+  content:''; width:8px; height:8px; border-radius:50%; background:var(--accent-bright);
+}
+.rtxt { font-size:13px; color:var(--text); }
+.rsub { font-size:11px; color:var(--sub); }
+
+.sw-row { display:flex; align-items:center; justify-content:space-between; padding:8px 0; }
+.sw-label { font-size:13px; color:var(--text); }
+.sw-sub   { font-size:11px; color:var(--sub); margin-top:2px; }
+.sw {
+  position:relative; width:40px; height:22px; flex-shrink:0;
+  cursor:pointer;
+}
+.sw input { opacity:0; width:0; height:0; position:absolute; }
+.sw-track {
+  position:absolute; inset:0; background:var(--surface3);
+  border-radius:22px; border:1px solid var(--border);
+  transition:background .2s,border-color .2s; cursor:pointer;
+}
+.sw-track::before {
+  content:''; position:absolute;
+  width:16px; height:16px; left:2px; top:2px;
+  background:var(--sub); border-radius:50%;
+  transition:transform .2s,background .2s;
+}
+.sw input:checked ~ .sw-track { background:rgba(139,63,191,.4); border-color:var(--accent); }
+.sw input:checked ~ .sw-track::before { transform:translateX(18px); background:var(--accent-bright); }
+
+.save-btn {
+  width:100%; height:44px; border-radius:10px; border:none;
+  background:linear-gradient(135deg,#8B3FBF,#6B21A8);
+  color:#fff; font-size:13px; font-weight:700; cursor:pointer;
+  margin-top:4px; box-shadow:0 4px 18px rgba(139,63,191,.35);
+  transition:all .2s;
+}
+.save-btn:hover { transform:translateY(-1px); box-shadow:0 6px 26px rgba(139,63,191,.55); }
+
+/* ── MOBILE panel ── */
+.url-row { display:flex; gap:8px; align-items:center; margin-bottom:12px; }
+.url-in {
+  flex:1; background:var(--surface2); border:1px solid var(--border);
+  border-radius:8px; color:var(--text); padding:9px 10px;
+  font-size:11px; font-family:Consolas,monospace; outline:none;
+}
+.cp-btn {
+  padding:9px 14px; border-radius:8px; border:none;
+  background:rgba(139,63,191,.2); color:var(--accent-bright);
+  font-size:12px; font-weight:700; cursor:pointer;
+  transition:background .15s; white-space:nowrap;
+}
+.cp-btn:hover { background:rgba(139,63,191,.38); }
+.cp-btn.copied { background:rgba(34,197,94,.2); color:var(--green); }
+.qr-wrap { display:flex; justify-content:center; margin:14px 0; }
+.qr-box {
+  width:160px; height:160px; background:#fff; border-radius:12px; padding:10px;
+  box-shadow:0 0 0 1px rgba(168,85,247,.2), 0 8px 32px rgba(0,0,0,.5);
+}
+.instruct {
+  background:var(--surface); border:1px solid var(--border);
+  border-radius:10px; overflow:hidden; margin-bottom:8px;
+}
+.instruct summary {
+  padding:12px 14px; font-size:13px; color:var(--text);
+  cursor:pointer; list-style:none;
+  display:flex; align-items:center; gap:8px; user-select:none;
+}
+.instruct summary::after { content:'›'; margin-left:auto; color:var(--sub); font-size:17px; transition:transform .2s; }
+.instruct[open] summary::after { transform:rotate(90deg); }
+.instruct-body { padding:10px 14px 12px; font-size:12px; color:var(--sub); line-height:1.7; border-top:1px solid var(--border); }
+
+/* ── LOGS panel ── */
+.log-bar {
+  display:flex; align-items:center; gap:8px; margin-bottom:10px;
+}
+.log-btn {
+  padding:5px 12px; border-radius:7px; border:1px solid var(--border);
+  background:var(--surface); color:var(--sub); font-size:11px;
+  cursor:pointer; transition:all .15s; font-family:inherit;
+}
+.log-btn:hover { border-color:var(--accent); color:var(--accent-bright); }
+.log-cnt { margin-left:auto; font-size:11px; color:var(--sub); }
+.log-box {
+  background:#07090f; border:1px solid var(--border); border-radius:10px;
+  padding:10px; height:480px; overflow-y:auto;
+  font-family:Consolas,monospace; font-size:11px; line-height:1.85;
+  scrollbar-width:thin; scrollbar-color:var(--border) transparent;
+}
+.log-box::-webkit-scrollbar { width:4px; }
+.log-box::-webkit-scrollbar-thumb { background:var(--border); border-radius:2px; }
+.le { display:flex; gap:10px; }
+.lt { color:#2E3A50; flex-shrink:0; }
+.li { color:#5b8fff; flex-shrink:0; width:36px; }
+.lw { color:#F59E0B; flex-shrink:0; width:36px; }
+.lr { color:var(--red); flex-shrink:0; width:36px; }
+.lm { color:#7A8CA8; }
+</style>
+</head>
+<body>
+<div class="app-window">
+
+  <!-- Titlebar -->
+  <div class="titlebar">
+    <div class="tb-logo">S</div>
+    <div>
+      <div class="tb-name">SpAC3DPI</div>
+      <div class="tb-sub">DPI Bypass Proxy</div>
+    </div>
+    <div class="tb-spacer"></div>
+    <div class="tb-btn" onclick="animMin()">—</div>
+    <div class="tb-btn close" onclick="animClose()">✕</div>
+  </div>
+
+  <div class="main">
+
+    <!-- Sidebar -->
+    <div class="sidebar">
+      <div class="nav active" data-p="status" onclick="go(this)">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+        <div class="tooltip">Durum</div>
+      </div>
+      <div class="nav" data-p="devices" onclick="go(this)">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+          <rect x="1" y="6" width="22" height="14" rx="2"/>
+          <path d="M1 10h22"/>
+          <circle cx="7" cy="15" r="1.2" fill="currentColor" stroke="none"/>
+          <circle cx="12" cy="15" r="1.2" fill="currentColor" stroke="none"/>
+          <circle cx="17" cy="15" r="1.2" fill="currentColor" stroke="none"/>
+        </svg>
+        <div class="tooltip">Cihazlar</div>
+      </div>
+      <div class="nav" data-p="settings" onclick="go(this)">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+          <circle cx="12" cy="12" r="3"/>
+          <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+        </svg>
+        <div class="tooltip">Ayarlar</div>
+      </div>
+      <div class="nav" data-p="mobile" onclick="go(this)">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+          <rect x="5" y="2" width="14" height="20" rx="2"/>
+          <circle cx="12" cy="18" r="1" fill="currentColor" stroke="none"/>
+          <line x1="9" y1="6" x2="15" y2="6"/>
+        </svg>
+        <div class="tooltip">Mobil</div>
+      </div>
+      <div class="nav" data-p="logs" onclick="go(this)">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+          <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>
+        </svg>
+        <div class="tooltip">Loglar</div>
+      </div>
+    </div>
+
+    <!-- Content -->
+    <div class="content">
+
+      <!-- STATUS -->
+      <div class="panel active" id="panel-status">
+        <div class="hero">
+          <div class="logo-wrap">
+            <div class="logo-ring" id="ring"></div>
+            <div class="logo-box" id="lbox">
+              S
+              <!-- pixel glitch -->
+              <div class="px" style="width:5px;height:5px;background:#C084FC;bottom:14px;right:-3px;opacity:.6"></div>
+              <div class="px" style="width:3px;height:3px;background:#8B3FBF;bottom:8px;right:-7px;opacity:.5"></div>
+              <div class="px" style="width:4px;height:4px;background:#A855F7;bottom:20px;right:-6px;opacity:.4"></div>
+              <div class="px" style="width:6px;height:6px;background:#7C3AED;top:14px;left:-4px;opacity:.5"></div>
+              <div class="px" style="width:3px;height:3px;background:#C084FC;top:8px;left:-8px;opacity:.4"></div>
+            </div>
+          </div>
+          <div class="status-title">SpAC3DPI</div>
+          <div class="dot-row">
+            <div class="dot" id="sdot"></div>
+            <div class="status-label" id="slabel">BAĞLI DEĞİL</div>
+          </div>
+          <div class="ip-label" id="sip" style="opacity:0">192.168.1.41 : 8888</div>
+        </div>
+
+        <button class="toggle-btn" id="tbtn" onclick="toggle()">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor"><polygon points="5,3 19,12 5,21"/></svg>
+          BAŞLAT
+        </button>
+
+        <div class="stats">
+          <div class="stat"><div class="stat-v" id="sv-up">—</div><div class="stat-l">Süre</div></div>
+          <div class="stat"><div class="stat-v" id="sv-cn">0</div><div class="stat-l">Bağlantı</div></div>
+          <div class="stat"><div class="stat-v" id="sv-dt">0 B</div><div class="stat-l">Veri</div></div>
+          <div class="stat"><div class="stat-v" id="sv-er">0</div><div class="stat-l">Hata</div></div>
+        </div>
+
+        <div class="svc-bar">
+          <div class="svc"><div class="sdot ok"></div>Proxy</div>
+          <div class="svc"><div class="sdot ok"></div>PAC</div>
+          <div class="svc"><div class="sdot" id="dpi-sdot"></div><span id="dpi-slbl">DPI: —</span></div>
+          <div class="svc"><div class="sdot ok"></div>QR</div>
+        </div>
+
+        <div class="card">
+          <div class="card-title">Servis Durumu</div>
+          <div class="kv"><span class="kv-k">HTTP Proxy</span><span class="kv-v ok">● Çalışıyor :8888</span></div>
+          <div class="kv"><span class="kv-k">PAC Sunucu</span><span class="kv-v ok">● Çalışıyor :8080</span></div>
+          <div class="kv"><span class="kv-k">GoodbyeDPI</span><span class="kv-v sub" id="gdpi-v">● Bekliyor</span></div>
+          <div class="kv"><span class="kv-k">DNS</span><span class="kv-v sub">Değiştirilmedi</span></div>
+        </div>
+
+        <div class="card">
+          <div class="card-title">Ağ Bilgisi</div>
+          <div class="kv"><span class="kv-k">Yerel IP</span><span class="kv-v">192.168.1.41</span></div>
+          <div class="kv"><span class="kv-k">DPI Modu</span><span class="kv-v">Dengeli</span></div>
+          <div class="kv"><span class="kv-k">DPI Kaynağı</span><span class="kv-v acc" id="dpi-src-v">—</span></div>
+          <div class="kv"><span class="kv-k">Chunk</span><span class="kv-v">40 byte</span></div>
+          <div class="kv"><span class="kv-k">ISP</span><span class="kv-v">Otomatik</span></div>
+        </div>
+      </div>
+
+      <!-- DEVICES -->
+      <div class="panel" id="panel-devices">
+        <div class="ph">
+          <div class="ph-title">Bağlı Cihazlar</div>
+          <div class="ph-badge" id="dev-badge">2 cihaz</div>
+        </div>
+        <div id="dev-list">
+          <div class="device">
+            <div class="dev-icon">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="5" y="2" width="14" height="20" rx="2"/><circle cx="12" cy="18" r="1" fill="currentColor" stroke="none"/></svg>
+            </div>
+            <div style="flex:1">
+              <div class="dev-ip">192.168.1.105</div>
+              <div class="dev-meta">Aktif bağlantı</div>
+            </div>
+            <div class="dev-right">
+              <div class="dev-data">12.4 MB</div>
+              <div class="dev-conns">3 bağlantı</div>
+            </div>
+            <div class="adot"></div>
+          </div>
+          <div class="device">
+            <div class="dev-icon">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="5" y="2" width="14" height="20" rx="2"/><circle cx="12" cy="18" r="1" fill="currentColor" stroke="none"/></svg>
+            </div>
+            <div style="flex:1">
+              <div class="dev-ip">192.168.1.112</div>
+              <div class="dev-meta">Aktif bağlantı</div>
+            </div>
+            <div class="dev-right">
+              <div class="dev-data">3.1 MB</div>
+              <div class="dev-conns">1 bağlantı</div>
+            </div>
+            <div class="adot"></div>
+          </div>
+        </div>
+        <div class="card" style="margin-top:8px">
+          <div class="card-title">Toplam</div>
+          <div class="kv"><span class="kv-k">Cihaz Sayısı</span><span class="kv-v">2</span></div>
+          <div class="kv"><span class="kv-k">Toplam Veri</span><span class="kv-v acc">15.5 MB</span></div>
+          <div class="kv"><span class="kv-k">Aktif Bağlantı</span><span class="kv-v">4</span></div>
+        </div>
+      </div>
+
+      <!-- SETTINGS -->
+      <div class="panel" id="panel-settings">
+        <div class="card">
+          <div class="card-title">DPI Bypass Modu</div>
+          <div class="radio-group">
+            <div class="radio-item" onclick="selR(this,'dpi')"><div class="rdot"></div><div><div class="rtxt">Turbo</div><div class="rsub">Hız öncelikli, temel bypass</div></div></div>
+            <div class="radio-item sel" onclick="selR(this,'dpi')"><div class="rdot"></div><div><div class="rtxt">Dengeli</div><div class="rsub">TLS chunking, standart koruma</div></div></div>
+            <div class="radio-item" onclick="selR(this,'dpi')"><div class="rdot"></div><div><div class="rtxt">Güçlü</div><div class="rsub">Paket parçalama + TTL desync</div></div></div>
+            <div class="radio-item" onclick="selR(this,'dpi')"><div class="rdot"></div><div><div class="rtxt">Özel</div><div class="rsub">Manuel GoodbyeDPI bayrakları</div></div></div>
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-title">ISP & DNS</div>
+          <div class="s-label">İnternet Sağlayıcı</div>
+          <select class="s-select"><option>Otomatik</option><option>Superonline / UltraNet</option><option>Türk Telekom (TTNet)</option><option>Vodafone TR</option><option>Turkcell</option></select>
+          <div class="s-label">DNS Şifreleme</div>
+          <select class="s-select"><option>Değiştirilmedi</option><option>Cloudflare (1.1.1.1)</option><option>Google (8.8.8.8)</option><option>AdGuard DNS</option><option>Quad9</option></select>
+        </div>
+        <div class="card">
+          <div class="card-title">Sistem</div>
+          <div class="sw-row">
+            <div><div class="sw-label">Sistem proxy'si</div><div class="sw-sub">Windows proxy'sini otomatik ayarla</div></div>
+            <label class="sw"><input type="checkbox"><div class="sw-track"></div></label>
+          </div>
+          <div class="sw-row">
+            <div><div class="sw-label">Windows ile başlat</div><div class="sw-sub">Sistem açılışında otomatik çalıştır</div></div>
+            <label class="sw"><input type="checkbox" checked><div class="sw-track"></div></label>
+          </div>
+          <div class="sw-row">
+            <div><div class="sw-label">Arka planda çalış</div><div class="sw-sub">Kapatınca tray'e küçül</div></div>
+            <label class="sw"><input type="checkbox" checked><div class="sw-track"></div></label>
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-title">Ağ Portları</div>
+          <div class="s-label">Proxy Portu</div>
+          <input type="number" class="s-input" value="8888">
+          <div class="s-label">PAC Portu</div>
+          <input type="number" class="s-input" value="8080">
+        </div>
+        <button class="save-btn" onclick="savedAnim(this)">Ayarları Kaydet</button>
+      </div>
+
+      <!-- MOBILE -->
+      <div class="panel" id="panel-mobile">
+        <div class="card">
+          <div class="card-title">Router PAC URL (Önerilen)</div>
+          <div class="url-row">
+            <input class="url-in" value="http://192.168.1.1:8080/proxy.pac" readonly>
+            <button class="cp-btn" onclick="copyAnim(this,'http://192.168.1.1:8080/proxy.pac')">Kopyala</button>
+          </div>
+          <div class="card-title">PC PAC URL (Alternatif)</div>
+          <div class="url-row">
+            <input class="url-in" value="http://192.168.1.41:8080/proxy.pac" readonly>
+            <button class="cp-btn" onclick="copyAnim(this,'http://192.168.1.41:8080/proxy.pac')">Kopyala</button>
+          </div>
+        </div>
+        <div class="qr-wrap"><canvas id="qrc" width="160" height="160" class="qr-box"></canvas></div>
+        <details class="instruct">
+          <summary><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="5" y="2" width="14" height="20" rx="2"/></svg>Android kurulum</summary>
+          <div class="instruct-body">Wi-Fi ayarları → Ağa uzun bas → Ağı değiştir → Gelişmiş → Proxy: Otomatik → URL'yi gir.</div>
+        </details>
+        <details class="instruct">
+          <summary><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2z"/></svg>iOS kurulum</summary>
+          <div class="instruct-body">Ayarlar → Wi-Fi → Ağa tıkla → HTTP Proxy: Otomatik → URL'yi gir.</div>
+        </details>
+        <details class="instruct">
+          <summary><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg>Windows kurulum</summary>
+          <div class="instruct-body">Ayarlar → Ağ ve İnternet → Proxy → Kurulum betiği kullan → URL'yi gir.</div>
+        </details>
+      </div>
+
+      <!-- LOGS -->
+      <div class="panel" id="panel-logs">
+        <div class="log-bar">
+          <button class="log-btn" onclick="clearLogs()">Temizle</button>
+          <button class="log-btn">Kopyala</button>
+          <label style="display:flex;align-items:center;gap:6px;font-size:11px;color:var(--sub);cursor:pointer;margin-left:4px">
+            <input type="checkbox" id="autoscroll" checked style="accent-color:var(--accent-bright)"> Otomatik kaydır
+          </label>
+          <span class="log-cnt" id="lcnt">12 kayıt</span>
+        </div>
+        <div class="log-box" id="logbox">
+          <div class="le"><span class="lt">14:22:01</span><span class="li">INFO</span><span class="lm">SpAC3DPI başlatıldı | IP:192.168.1.41 Proxy:8888 PAC:8080</span></div>
+          <div class="le"><span class="lt">14:22:01</span><span class="li">INFO</span><span class="lm">HTTP Proxy başlatıldı → 0.0.0.0:8888</span></div>
+          <div class="le"><span class="lt">14:22:01</span><span class="li">INFO</span><span class="lm">PAC sunucusu başlatıldı → 0.0.0.0:8080</span></div>
+          <div class="le"><span class="lt">14:22:02</span><span class="li">INFO</span><span class="lm">GoodbyeDPI başlatıldı (bundle) → PID:4821</span></div>
+          <div class="le"><span class="lt">14:22:02</span><span class="li">INFO</span><span class="lm">Watchdog aktif — 5s port kontrolü</span></div>
+          <div class="le"><span class="lt">14:22:10</span><span class="lw">WARN</span><span class="lm">DNS uygulanmadı: kullanıcı tercih etti</span></div>
+          <div class="le"><span class="lt">14:23:15</span><span class="li">INFO</span><span class="lm">Yeni cihaz bağlandı: 192.168.1.105</span></div>
+          <div class="le"><span class="lt">14:23:18</span><span class="li">INFO</span><span class="lm">CONNECT youtube.com:443 → 200</span></div>
+          <div class="le"><span class="lt">14:24:02</span><span class="li">INFO</span><span class="lm">Yeni cihaz bağlandı: 192.168.1.112</span></div>
+          <div class="le"><span class="lt">14:25:11</span><span class="lr">ERR </span><span class="lm">CONNECT discord.com:443 → zaman aşımı</span></div>
+          <div class="le"><span class="lt">14:25:12</span><span class="li">INFO</span><span class="lm">CONNECT discord.com:443 → 200 (yeniden deneme)</span></div>
+          <div class="le"><span class="lt">14:26:30</span><span class="li">INFO</span><span class="lm">Watchdog: tüm portlar sağlıklı</span></div>
+        </div>
+      </div>
+
+    </div><!-- /content -->
+  </div><!-- /main -->
+</div><!-- /app-window -->
+
+<script>
+// Panel switch
+function go(el) {
+  document.querySelectorAll('.nav').forEach(n=>n.classList.remove('active'));
+  document.querySelectorAll('.panel').forEach(p=>p.classList.remove('active'));
+  el.classList.add('active');
+  document.getElementById('panel-'+el.dataset.p).classList.add('active');
+}
+
+// Toggle
+let on=false, tick=null, secs=0, bytes=0;
+function toggle(){
+  on=!on;
+  const btn=document.getElementById('tbtn');
+  const dot=document.getElementById('sdot');
+  const lbl=document.getElementById('slabel');
+  const ring=document.getElementById('ring');
+  const lbox=document.getElementById('lbox');
+  const ip=document.getElementById('sip');
+  if(on){
+    btn.className='toggle-btn stop';
+    btn.innerHTML='<svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg> DURDUR';
+    dot.classList.add('on'); lbl.classList.add('on'); lbl.textContent='BAĞLI';
+    ring.classList.add('on'); lbox.classList.add('on'); ip.style.opacity='1';
+    document.getElementById('dpi-sdot').classList.add('ok');
+    document.getElementById('dpi-slbl').textContent='DPI: Bundle';
+    document.getElementById('gdpi-v').className='kv-v ok'; document.getElementById('gdpi-v').textContent='● Çalışıyor';
+    document.getElementById('dpi-src-v').textContent='Bundle (dahili)';
+    secs=0; bytes=0;
+    tick=setInterval(()=>{
+      secs++;
+      document.getElementById('sv-up').textContent=fmt(secs);
+      document.getElementById('sv-cn').textContent=Math.floor(Math.random()*6);
+      bytes+=Math.floor(Math.random()*80000);
+      document.getElementById('sv-dt').textContent=fmtB(bytes);
+    },1000);
+  } else {
+    btn.className='toggle-btn';
+    btn.innerHTML='<svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor"><polygon points="5,3 19,12 5,21"/></svg> BAŞLAT';
+    dot.classList.remove('on'); lbl.classList.remove('on'); lbl.textContent='BAĞLI DEĞİL';
+    ring.classList.remove('on'); lbox.classList.remove('on'); ip.style.opacity='0';
+    document.getElementById('dpi-sdot').classList.remove('ok');
+    document.getElementById('dpi-slbl').textContent='DPI: —';
+    document.getElementById('gdpi-v').className='kv-v sub'; document.getElementById('gdpi-v').textContent='● Bekliyor';
+    document.getElementById('dpi-src-v').textContent='—';
+    clearInterval(tick);
+    document.getElementById('sv-up').textContent='—';
+    document.getElementById('sv-cn').textContent='0';
+    document.getElementById('sv-dt').textContent='0 B';
+  }
+}
+function fmt(s){const h=Math.floor(s/3600),m=Math.floor((s%3600)/60),sec=s%60;return h?`${h}:${p(m)}:${p(sec)}`:`${m}:${p(sec)}`}
+function p(n){return String(n).padStart(2,'0')}
+function fmtB(b){if(b<1024)return b+' B';if(b<1048576)return(b/1024).toFixed(1)+' KB';return(b/1048576).toFixed(1)+' MB'}
+
+// Radio
+function selR(el,g){document.querySelectorAll('.radio-item').forEach(r=>r.classList.remove('sel'));el.classList.add('sel');}
+
+// Save animation
+function savedAnim(btn){
+  const orig=btn.textContent;
+  btn.textContent='✔ Kaydedildi';
+  btn.style.background='linear-gradient(135deg,#16a34a,#15803d)';
+  setTimeout(()=>{btn.textContent=orig;btn.style.background='';},2000);
+}
+
+// Copy animation
+function copyAnim(btn,txt){
+  btn.textContent='✔ Kopyalandı'; btn.classList.add('copied');
+  setTimeout(()=>{btn.textContent='Kopyala';btn.classList.remove('copied');},1800);
+}
+
+// QR canvas
+(function(){
+  const c=document.getElementById('qrc'),ctx=c.getContext('2d');
+  ctx.fillStyle='#fff'; ctx.fillRect(0,0,160,160);
+  ctx.fillStyle='#13101E';
+  const s=9,cols=16,rows=16;
+  const ox=(160-cols*s)/2,oy=(160-rows*s)/2;
+  for(let r=0;r<rows;r++)for(let cc=0;cc<cols;cc++){
+    const corner=(r<4&&cc<4)||(r<4&&cc>11)||(r>11&&cc<4);
+    if(corner||Math.random()>.5) ctx.fillRect(ox+cc*s,oy+r*s,s-1,s-1);
+  }
+  [[0,0],[0,12],[12,0]].forEach(([r,c])=>{
+    ctx.fillStyle='#13101E'; ctx.fillRect(ox+c*s-1,oy+r*s-1,4*s+2,4*s+2);
+    ctx.fillStyle='#fff';    ctx.fillRect(ox+c*s,oy+r*s,4*s,4*s);
+    ctx.fillStyle='#13101E'; ctx.fillRect(ox+c*s+s,oy+r*s+s,2*s,2*s);
+  });
+})();
+
+// Window btns (demo)
+function animMin(){const w=document.querySelector('.app-window');w.style.transition='transform .15s';w.style.transform='scale(0.97) translateY(4px)';setTimeout(()=>w.style.transform='',200)}
+function animClose(){alert('Demo — gerçek uygulamada tray\'e küçülür');}
+
+// Live log stream
+let lc=12;
+const msgs=[
+  ['INFO','CONNECT netflix.com:443 → 200'],
+  ['INFO','CONNECT youtube.com:443 → 200'],
+  ['WARN','Router PAC güncellemesi gecikti, yeniden deneniyor'],
+  ['INFO','CONNECT instagram.com:443 → 200'],
+  ['INFO','Watchdog: tüm portlar sağlıklı'],
+  ['INFO','CONNECT twitch.tv:443 → 200'],
+  ['ERR ','CONNECT api.example.com:443 → bağlantı reddedildi'],
+];
+setInterval(()=>{
+  const m=msgs[Math.floor(Math.random()*msgs.length)];
+  const n=new Date();
+  const t=`${p(n.getHours())}:${p(n.getMinutes())}:${p(n.getSeconds())}`;
+  const lb=document.getElementById('logbox');
+  const cls=m[0].trim()==='INFO'?'li':m[0].trim()==='WARN'?'lw':'lr';
+  const d=document.createElement('div');
+  d.className='le';
+  d.innerHTML=`<span class="lt">${t}</span><span class="${cls}">${m[0]}</span><span class="lm">${m[1]}</span>`;
+  lb.appendChild(d);
+  lc++;
+  document.getElementById('lcnt').textContent=lc+' kayıt';
+  if(document.getElementById('autoscroll').checked) lb.scrollTop=lb.scrollHeight;
+  if(lb.children.length>500) lb.removeChild(lb.firstChild);
+},3500);
+
+// Clear logs
+function clearLogs(){document.getElementById('logbox').innerHTML='';lc=0;document.getElementById('lcnt').textContent='0 kayıt';}
+</script>
+</body>
+</html>
