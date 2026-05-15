@@ -161,28 +161,36 @@ func RouterInstall(cfg RouterSetupCfg, progress func(RouterStep)) error {
 	defer client.Close()
 	progress(RouterStep{"SSH bağlantısı kuruldu", "ok"})
 
-	if !isOpenWrt(client) {
-		return fmt.Errorf("bu cihaz OpenWrt değil — desteklenmiyor")
+	// Firmware tespiti — sadece bilgi amaçlı, hard block değil
+	if isOpenWrt(client) {
+		progress(RouterStep{"OpenWrt tespit edildi", "ok"})
+	} else {
+		progress(RouterStep{"Özel/Linux tabanlı firmware — devam ediliyor", "info"})
 	}
-	progress(RouterStep{"OpenWrt tespit edildi", "ok"})
-
-	if !hasEntware(client) {
-		return fmt.Errorf("Entware bulunamadı — önce Entware kurulmalı")
-	}
-	progress(RouterStep{"Entware mevcut", "ok"})
 
 	if !hasLighttpd(client) {
-		progress(RouterStep{"lighttpd kuruluyor...", "info"})
-		if out, err := sshRun(client, "opkg update && opkg install lighttpd"); err != nil {
-			return fmt.Errorf("lighttpd kurulum hatası: %s", out)
+		// opkg varsa (OpenWrt/Entware) ile kurmayı dene
+		if hasEntware(client) {
+			progress(RouterStep{"lighttpd kuruluyor (opkg)...", "info"})
+			if out, err := sshRun(client, "opkg update && opkg install lighttpd"); err != nil {
+				return fmt.Errorf("lighttpd kurulamadı: %s", out)
+			}
+			progress(RouterStep{"lighttpd kuruldu", "ok"})
+		} else {
+			return fmt.Errorf("lighttpd bulunamadı — router'da manuel olarak kurulmalı")
 		}
-		progress(RouterStep{"lighttpd kuruldu", "ok"})
 	} else {
 		progress(RouterStep{"lighttpd mevcut", "ok"})
 	}
 
+	// Entware varsa /opt/share/pac, yoksa /tmp/pac (reboot'ta sıfırlanır ama evrensel çalışır)
+	pacDir := "/opt/share/pac"
+	if !hasEntware(client) {
+		pacDir = "/tmp/pac"
+	}
+
 	progress(RouterStep{"Dosyalar oluşturuluyor...", "info"})
-	if _, err := sshRun(client, "mkdir -p /opt/share/pac"); err != nil {
+	if _, err := sshRun(client, "mkdir -p "+pacDir); err != nil {
 		return fmt.Errorf("dizin oluşturulamadı: %w", err)
 	}
 
@@ -191,11 +199,18 @@ func RouterInstall(cfg RouterSetupCfg, progress func(RouterStep)) error {
 		content string
 		exec    bool
 	}{
-		{"/opt/share/pac/lighttpd.conf", routerLighttpdConf, false},
-		{"/opt/share/pac/proxy.pac", routerProxyPac, true},
-		{"/opt/share/pac/hb.sh", routerHbSh, true},
-		{"/opt/share/pac/update.sh", routerUpdateSh, true},
-		{"/opt/etc/init.d/S80spac3dpi", routerInitScript, true},
+		{pacDir + "/lighttpd.conf", routerLighttpdConf, false},
+		{pacDir + "/proxy.pac", routerProxyPac, true},
+		{pacDir + "/hb.sh", routerHbSh, true},
+		{pacDir + "/update.sh", routerUpdateSh, true},
+	}
+	// Init script sadece Entware varsa (/opt/etc/init.d/ mevcut olduğunda)
+	if hasEntware(client) {
+		files = append(files, struct {
+			path    string
+			content string
+			exec    bool
+		}{"/opt/etc/init.d/S80spac3dpi", routerInitScript, true})
 	}
 	for _, f := range files {
 		if err := sshWriteFile(client, f.path, f.content); err != nil {
@@ -209,8 +224,16 @@ func RouterInstall(cfg RouterSetupCfg, progress func(RouterStep)) error {
 	}
 	progress(RouterStep{"Scriptler yazıldı", "ok"})
 
+	// lighttpd binary'sini bul (Entware: /opt/bin, diğerleri: /usr/sbin veya PATH'te)
+	lighttpdBin := "lighttpd"
+	if out, _ := sshRun(client, "which lighttpd 2>/dev/null"); out != "" {
+		lighttpdBin = out
+	} else if _, err := sshRun(client, "ls /opt/bin/lighttpd 2>/dev/null"); err == nil {
+		lighttpdBin = "/opt/bin/lighttpd"
+	}
+
 	sshRun(client, `if [ -f /tmp/spac3dpi_lighttpd.pid ]; then kill $(cat /tmp/spac3dpi_lighttpd.pid) 2>/dev/null; sleep 1; fi`)
-	if out, err := sshRun(client, "/opt/bin/lighttpd -f /opt/share/pac/lighttpd.conf"); err != nil {
+	if out, err := sshRun(client, lighttpdBin+" -f '"+pacDir+"/lighttpd.conf'"); err != nil {
 		return fmt.Errorf("lighttpd başlatılamadı: %s", out)
 	}
 	progress(RouterStep{"lighttpd başlatıldı (port 8090)", "ok"})
