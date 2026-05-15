@@ -2,7 +2,7 @@
 
 // Version — build sırasında ldflags ile enjekte edilir:
 // go build -ldflags "-X main.Version=1.2.0"
-var Version = "1.0.5"
+var Version = "1.0.6"
 
 const (
 	githubOwner = "Anilyldrmm"
