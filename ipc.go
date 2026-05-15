@@ -153,8 +153,8 @@ func pushQR() {
 	pcPACURL := fmt.Sprintf("http://%s:%d/proxy.pac", g.localIP, c.PACPort)
 	routerPACURL := fmt.Sprintf("http://%s:8090/proxy.pac", guessGatewayIP(g.localIP))
 
-	// QR → router PAC URL (önerilen)
-	png, err := qrcode.Encode(routerPACURL, qrcode.High, 200)
+	// QR → setup sayfası (telefon tarayıcısında açılır, PAC URL'ini gösterir)
+	png, err := qrcode.Encode(setupURL, qrcode.High, 200)
 	if err != nil {
 		return
 	}

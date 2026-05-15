@@ -4,7 +4,9 @@ package main
 
 import (
 	"fmt"
+	"os"
 	"strings"
+	"syscall"
 	"unsafe"
 
 	webview "github.com/jchv/go-webview2"
@@ -18,6 +20,7 @@ var (
 	wvProcSetWindowPos     = wvModUser32.NewProc("SetWindowPos")
 	wvProcGetSystemMetrics = wvModUser32.NewProc("GetSystemMetrics")
 	wvProcShowWindow       = wvModUser32.NewProc("ShowWindow")
+	wvProcLoadImage        = wvModUser32.NewProc("LoadImageW")
 
 	wvProcReleaseCapture   = wvModUser32.NewProc("ReleaseCapture")
 	wvProcSendMessage      = wvModUser32.NewProc("SendMessageW")
@@ -67,6 +70,7 @@ func initWindow() {
 	wvMakeFrameless(hwnd)
 	wvCenterWindow(hwnd, 400, 640)
 	wvApplyDWMShadow(hwnd)
+	wvSetTaskbarIcon(hwnd)
 
 	// Logo inject — sayfa yüklenmeden önce window.__logoB64 hazır olsun
 	logoB64 := logoBase64()
@@ -111,6 +115,35 @@ func wvApplyDWMShadow(hwnd uintptr) {
 	round := wvDwmwcpRound
 	wvProcDwmSetWindowAttr.Call(hwnd, wvDwmwaCornerPref,
 		uintptr(unsafe.Pointer(&round)), 4)
+}
+
+// wvSetTaskbarIcon — ICO'yu geçici dosyaya yazar, HICON yükler, WM_SETICON gönderir.
+func wvSetTaskbarIcon(hwnd uintptr) {
+	icoBytes := makeICOBytes(true)
+	if len(icoBytes) == 0 {
+		return
+	}
+	f, err := os.CreateTemp("", "spac3dpi_*.ico")
+	if err != nil {
+		return
+	}
+	defer os.Remove(f.Name())
+	f.Write(icoBytes)
+	f.Close()
+
+	path16, err := syscall.UTF16PtrFromString(f.Name())
+	if err != nil {
+		return
+	}
+	const imageIcon = 1
+	const lrLoadFromFile = 0x10
+	hIcon, _, _ := wvProcLoadImage.Call(0, uintptr(unsafe.Pointer(path16)), imageIcon, 0, 0, lrLoadFromFile)
+	if hIcon == 0 {
+		return
+	}
+	const wmSetIcon = 0x0080
+	wvProcSendMessage.Call(hwnd, wmSetIcon, 0, hIcon) // ICON_SMALL
+	wvProcSendMessage.Call(hwnd, wmSetIcon, 1, hIcon) // ICON_BIG
 }
 
 // showWindow — pencereyi göster (tray'den çağrılır).

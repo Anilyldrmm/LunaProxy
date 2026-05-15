@@ -69,7 +69,7 @@ func updateTrayState(running bool) {
 	}
 }
 
-// makeIconPNG — tray için 32×32 PNG ikonu üretir.
+// makeIconPNG — tray için 32×32 PNG ikonu üretir (yeşil/kırmızı durum noktası ile).
 func makeIconPNG(active bool) []byte {
 	src, err := png.Decode(bytes.NewReader(rawLogoBytes))
 	if err != nil {
@@ -79,6 +79,7 @@ func makeIconPNG(active bool) []byte {
 		src = dimLogo(src)
 	}
 	resized := resizeLogo(src, 32)
+	drawStatusDot(resized, 32, active)
 	return encodePNG(resized)
 }
 

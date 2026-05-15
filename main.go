@@ -61,6 +61,12 @@ func main() {
 		pendingUpdateTag.Store(tag)
 	})
 
+	if c.ProxyAutoStart {
+		if err := g.start(); err != nil {
+			logError("Otomatik başlatma hatası: " + err.Error())
+		}
+	}
+
 	initWindow() // WebView2 mesaj döngüsü — çıkana kadar bloklar
 }
 

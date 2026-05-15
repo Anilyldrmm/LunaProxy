@@ -35,8 +35,7 @@ body {
   display:flex; flex-direction:column;
   box-shadow:
     0 0 0 1px var(--border),
-    0 24px 80px rgba(0,0,0,.85),
-    0 0 100px rgba(139,63,191,.18);
+    0 24px 80px rgba(0,0,0,.85);
   position:relative;
 }
 
@@ -50,10 +49,10 @@ body {
 }
 .tb-logo {
   width:28px; height:28px; border-radius:8px; flex-shrink:0;
-  background:linear-gradient(135deg,#8B3FBF,#6B21A8);
+  background:#1A1628;
   display:flex; align-items:center; justify-content:center;
-  font-weight:900; font-size:15px; color:#fff;
-  box-shadow:0 0 14px rgba(168,85,247,.5);
+  font-weight:900; font-size:15px; color:var(--sub);
+  border:1px solid var(--border);
   font-style:italic;
   overflow:hidden;
 }
@@ -154,7 +153,8 @@ body {
 }
 .logo-box {
   width:84px; height:84px; border-radius:20px;
-  background:linear-gradient(135deg,#8B3FBF 0%,#6B21A8 100%);
+  background:#1A1628;
+  border:1px solid var(--border);
   display:flex; align-items:center; justify-content:center;
   font-size:44px; font-weight:900; font-style:italic; color:#fff;
   position:relative; overflow:hidden;
@@ -415,8 +415,7 @@ window.addEventListener('DOMContentLoaded', function() {
     </div>
     <div class="tb-spacer"></div>
     <div class="tb-btn" onclick="window.goMessage(JSON.stringify({type:'windowMinimize'}))">—</div>
-    <div class="tb-btn" onclick="window.goMessage(JSON.stringify({type:'windowHide'}))">⊟</div>
-    <div class="tb-btn close" onclick="window.goMessage(JSON.stringify({type:'windowExit'}))">✕</div>
+    <div class="tb-btn close" title="Tray'e küçült" onclick="window.goMessage(JSON.stringify({type:'windowHide'}))">✕</div>
   </div>
 
   <div class="main">
@@ -570,11 +569,11 @@ window.addEventListener('DOMContentLoaded', function() {
           </div>
           <div class="sw-row">
             <div><div class="sw-label">Windows ile başlat</div><div class="sw-sub">Sistem açılışında otomatik çalıştır</div></div>
-            <label class="sw"><input type="checkbox" id="sw-autostart" checked><div class="sw-track"></div></label>
+            <label class="sw"><input type="checkbox" id="sw-autostart"><div class="sw-track"></div></label>
           </div>
           <div class="sw-row">
-            <div><div class="sw-label">Arka planda çalış</div><div class="sw-sub">Kapatınca tray'e küçül</div></div>
-            <label class="sw"><input type="checkbox" checked><div class="sw-track"></div></label>
+            <div><div class="sw-label">Başlangıçta proxy'yi başlat</div><div class="sw-sub">Uygulama açılınca proxy otomatik çalışsın</div></div>
+            <label class="sw"><input type="checkbox" id="sw-proxy-autostart"><div class="sw-track"></div></label>
           </div>
         </div>
         <div class="card">
@@ -673,8 +672,9 @@ function savedAnim(btn){
 function saveSettings() {
   var cfg = {
     dpi_mode: (document.querySelector('.radio-item.sel[data-val]') || {dataset:{val:'balanced'}}).dataset.val || 'balanced',
-    set_system_proxy: (document.getElementById('sw-sysproxy') || {}).checked || false,
-    auto_start: (document.getElementById('sw-autostart') || {}).checked || false,
+    set_system_proxy: !!(document.getElementById('sw-sysproxy') || {}).checked,
+    auto_start: !!(document.getElementById('sw-autostart') || {}).checked,
+    proxy_auto_start: !!(document.getElementById('sw-proxy-autostart') || {}).checked,
     proxy_port: parseInt((document.getElementById('inp-proxy-port') || {value:'8888'}).value) || 8888,
     pac_port: parseInt((document.getElementById('inp-pac-port') || {value:'8080'}).value) || 8080,
   };
@@ -823,6 +823,8 @@ function loadSettings(cfg) {
   });
   var autoStart = document.getElementById('sw-autostart');
   if (autoStart) autoStart.checked = !!(cfg.auto_start||cfg.AutoStart);
+  var proxyAutoStart = document.getElementById('sw-proxy-autostart');
+  if (proxyAutoStart) proxyAutoStart.checked = !!(cfg.proxy_auto_start||cfg.ProxyAutoStart);
   var sysProxy = document.getElementById('sw-sysproxy');
   if (sysProxy) sysProxy.checked = !!(cfg.set_system_proxy||cfg.SetSystemProxy);
   var pp = document.getElementById('inp-proxy-port');
