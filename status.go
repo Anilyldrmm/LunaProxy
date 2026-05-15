@@ -31,6 +31,7 @@ type StatusPayload struct {
 	SetSysProxy bool
 	SetupURL    string       `json:"setupUrl"`
 	UpdateTag   string       `json:"updateTag"`
+	UpdateURL   string       `json:"updateURL"`
 	Devices     []DeviceInfo `json:"devices"`
 }
 

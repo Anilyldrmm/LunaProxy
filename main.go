@@ -1,4 +1,4 @@
-package main
+﻿package main
 
 import (
 	"context"
@@ -20,7 +20,7 @@ func openRunKey(write bool) (registry.Key, error) {
 		`Software\Microsoft\Windows\CurrentVersion\Run`, access)
 }
 
-const appName = "SpAC3DPI"
+const appName = "LunaProxy"
 
 type app struct {
 	mu        sync.Mutex
@@ -57,8 +57,9 @@ func main() {
 
 	initTray()
 
-	StartUpdateChecker(func(tag string) {
+	StartUpdateChecker(func(tag, url string) {
 		pendingUpdateTag.Store(tag)
+		pendingUpdateURL.Store(url)
 	})
 
 	if c.ProxyAutoStart {
@@ -151,7 +152,7 @@ func (a *app) start() error {
 	watchdog.Stop()
 	watchdog.Start()
 
-	logInfo(fmt.Sprintf("SpAC3DPI başlatıldı | IP:%s Proxy:%d PAC:%d DPIMode:%s ISP:%s DNS:%s DPISrc:%s",
+	logInfo(fmt.Sprintf("LunaProxy başlatıldı | IP:%s Proxy:%d PAC:%d DPIMode:%s ISP:%s DNS:%s DPISrc:%s",
 		a.localIP, c.ProxyPort, c.PACPort, c.DPIMode, c.ISP, c.DNSMode, c.DPISource))
 	return nil
 }
@@ -199,7 +200,7 @@ func (a *app) stop() {
 			defer cancel()
 			proxySrv.Shutdown(ctx)
 		}
-		logInfo("SpAC3DPI durduruldu — PAC sunucusu DIRECT modunda çalışıyor")
+		logInfo("LunaProxy durduruldu — PAC sunucusu DIRECT modunda çalışıyor")
 	}()
 }
 

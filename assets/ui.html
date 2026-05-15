@@ -1,8 +1,8 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="tr">
 <head>
 <meta charset="UTF-8">
-<title>SpAC3DPI — UI Demo</title>
+<title>LunaProxy — UI Demo</title>
 <style>
 :root {
   --bg: #0D0B14;
@@ -439,8 +439,8 @@ window.addEventListener('DOMContentLoaded', function() {
   <div class="titlebar" id="titlebar">
     <div class="tb-logo"><img class="tb-logo-img" src="" alt="" style="display:none;width:28px;height:28px;object-fit:cover;border-radius:8px"><span id="tbl-s">S</span></div>
     <div>
-      <div class="tb-name">SpAC3DPI</div>
-      <div class="tb-sub">DPI Bypass Proxy</div>
+      <div class="tb-name">LunaProxy</div>
+      <div class="tb-sub">DPI Bypass Proxy &nbsp;·&nbsp; by SpAC3</div>
     </div>
     <div class="tb-spacer"></div>
     <div class="tb-btn" onclick="window.goMessage(JSON.stringify({type:'windowMinimize'}))">—</div>
@@ -509,7 +509,7 @@ window.addEventListener('DOMContentLoaded', function() {
               <span id="lbox-s">S</span>
             </div>
           </div>
-          <div class="status-title">SpAC3DPI</div>
+          <div class="status-title">LunaProxy</div>
           <div class="dot-row">
             <div class="dot" id="sdot"></div>
             <div class="status-label" id="slabel">BAĞLI DEĞİL</div>
@@ -874,7 +874,8 @@ function updateStatus(s) {
   if (devs) updateDevices(devs);
 
   var tag = s.UpdateTag||s.updateTag;
-  if (tag) showUpdateBanner(tag, '');
+  var url = s.UpdateURL||s.updateURL||'';
+  if (tag) showUpdateBanner(tag, url);
 }
 
 function updateDevices(devs) {

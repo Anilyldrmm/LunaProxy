@@ -1,4 +1,4 @@
-package main
+﻿package main
 
 import (
 	"encoding/json"
@@ -75,7 +75,7 @@ func CheckUpdate() (tagName, downloadURL string, err error) {
 		return "", "", nil
 	}
 	for _, a := range rel.Assets {
-		if strings.EqualFold(a.Name, "SpAC3DPI.exe") {
+		if strings.EqualFold(a.Name, "LunaProxy.exe") {
 			return rel.TagName, a.BrowserDownloadURL, nil
 		}
 	}
@@ -85,7 +85,7 @@ func CheckUpdate() (tagName, downloadURL string, err error) {
 // DownloadAndReplace — yeni exe'yi indirir, PS1 replace script çalıştırır, çıkar.
 func DownloadAndReplace(downloadURL string) error {
 	tmpDir := os.TempDir()
-	newExe := filepath.Join(tmpDir, "SpAC3DPI_update.exe")
+	newExe := filepath.Join(tmpDir, "LunaProxy_update.exe")
 
 	resp, err := http.Get(downloadURL)
 	if err != nil {
@@ -107,7 +107,7 @@ func DownloadAndReplace(downloadURL string) error {
 		return err
 	}
 
-	ps1 := filepath.Join(tmpDir, "SpAC3DPI_update.ps1")
+	ps1 := filepath.Join(tmpDir, "LunaProxy_update.ps1")
 	script := fmt.Sprintf(`Start-Sleep -Seconds 2
 Copy-Item -Force "%s" "%s"
 Start-Process "%s"
@@ -127,18 +127,18 @@ Remove-Item "%s" -ErrorAction SilentlyContinue
 }
 
 // StartUpdateChecker — arka planda her 6 saatte bir güncelleme kontrol eder.
-// Güncelleme bulunursa onNotify(tagName) çağrılır.
-func StartUpdateChecker(onNotify func(tagName string)) {
+// Güncelleme bulunursa onNotify(tagName, downloadURL) çağrılır.
+func StartUpdateChecker(onNotify func(tagName, downloadURL string)) {
 	go func() {
 		check := func() {
-			tag, _, err := CheckUpdate()
+			tag, url, err := CheckUpdate()
 			if err != nil {
 				logWarn("Güncelleme kontrolü başarısız: " + err.Error())
 				return
 			}
 			if tag != "" {
 				logInfo("Yeni sürüm mevcut: " + tag)
-				onNotify(tag)
+				onNotify(tag, url)
 			}
 		}
 		check()

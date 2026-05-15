@@ -13,8 +13,9 @@ import (
 	qrcode "github.com/skip2/go-qrcode"
 )
 
-// pendingUpdateTag — güncelleme varsa set edilir; pushStatus payload'una eklenir.
+// pendingUpdateTag/URL — güncelleme varsa set edilir; pushStatus payload'una eklenir.
 var pendingUpdateTag atomic.Value
+var pendingUpdateURL atomic.Value
 
 // lastLogSent — pushLogs'un son gönderdiği log index'i (dedup için).
 var lastLogSent atomic.Int64
@@ -166,6 +167,9 @@ func pushStatus() {
 	s := buildStatus()
 	if tag, ok := pendingUpdateTag.Load().(string); ok && tag != "" {
 		s.UpdateTag = tag
+	}
+	if url, ok := pendingUpdateURL.Load().(string); ok && url != "" {
+		s.UpdateURL = url
 	}
 	data, err := json.Marshal(s)
 	if err != nil {
