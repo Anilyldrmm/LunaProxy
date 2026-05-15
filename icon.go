@@ -132,8 +132,9 @@ func drawStatusDot(img *image.NRGBA, sz int, active bool) {
 	}
 }
 
-// makeTrayICOBytes — tray için durum noktası eklenmiş ICO üretir.
-// 16/20/24/32/48px: tüm Windows DPI ölçekleri (100%→300%) kapsanır.
+// makeTrayICOBytes — tray için durum noktası eklenmiş DIB-format ICO üretir.
+// DIB (XOR+AND mask) formatı kullanılır; fyne.io/systray CreateIconFromResourceEx
+// çağırır ve bu fonksiyon PNG-in-ICO'yu desteklemez, DIB'i destekler.
 func makeTrayICOBytes(active bool) []byte {
 	src, err := png.Decode(bytes.NewReader(rawLogoBytes))
 	if err != nil {
@@ -143,15 +144,80 @@ func makeTrayICOBytes(active bool) []byte {
 		src = dimLogo(src)
 	}
 	sizes := []int{48, 32, 24, 20, 16}
-	var pngs [][]byte
+	var imgs []*image.NRGBA
 	for _, sz := range sizes {
 		resized := resizeLogo(src, sz)
 		drawStatusDot(resized, sz, active)
-		var buf bytes.Buffer
-		png.Encode(&buf, resized)
-		pngs = append(pngs, buf.Bytes())
+		imgs = append(imgs, resized)
 	}
-	return packICO(sizes, pngs)
+	return packDIBICO(sizes, imgs)
+}
+
+// packDIBICO — NRGBA görüntülerinden DIB-format ICO baytları üretir.
+// CreateIconFromResourceEx bu formatı destekler; PNG-in-ICO desteklemez.
+func packDIBICO(sizes []int, imgs []*image.NRGBA) []byte {
+	count := len(sizes)
+	entries := make([][]byte, count)
+	for i, img := range imgs {
+		entries[i] = nrgbaToDIB(img)
+	}
+	headerOff := uint32(6 + 16*count)
+	var ico bytes.Buffer
+	binary.Write(&ico, binary.LittleEndian, uint16(0)) // reserved
+	binary.Write(&ico, binary.LittleEndian, uint16(1)) // type = ICO
+	binary.Write(&ico, binary.LittleEndian, uint16(count))
+	off := headerOff
+	for i, sz := range sizes {
+		w, h := uint8(sz), uint8(sz)
+		if sz >= 256 {
+			w, h = 0, 0
+		}
+		ico.WriteByte(w); ico.WriteByte(h)
+		ico.WriteByte(0); ico.WriteByte(0)
+		binary.Write(&ico, binary.LittleEndian, uint16(1))
+		binary.Write(&ico, binary.LittleEndian, uint16(32))
+		binary.Write(&ico, binary.LittleEndian, uint32(len(entries[i])))
+		binary.Write(&ico, binary.LittleEndian, off)
+		off += uint32(len(entries[i]))
+	}
+	for _, e := range entries {
+		ico.Write(e)
+	}
+	return ico.Bytes()
+}
+
+// nrgbaToDIB — NRGBA görüntüsünü ICO DIB veri formatına çevirir.
+// BITMAPINFOHEADER + BGRA piksel verisi (bottom-up) + AND maskı (sıfır).
+func nrgbaToDIB(img *image.NRGBA) []byte {
+	b := img.Bounds()
+	w, h := b.Dx(), b.Dy()
+	maskStride := ((w + 31) / 32) * 4
+	var buf bytes.Buffer
+	// BITMAPINFOHEADER
+	binary.Write(&buf, binary.LittleEndian, uint32(40))
+	binary.Write(&buf, binary.LittleEndian, int32(w))
+	binary.Write(&buf, binary.LittleEndian, int32(h*2)) // XOR+AND yüksekliği
+	binary.Write(&buf, binary.LittleEndian, uint16(1))
+	binary.Write(&buf, binary.LittleEndian, uint16(32))
+	binary.Write(&buf, binary.LittleEndian, uint32(0))
+	binary.Write(&buf, binary.LittleEndian, uint32(w*h*4))
+	binary.Write(&buf, binary.LittleEndian, int32(0))
+	binary.Write(&buf, binary.LittleEndian, int32(0))
+	binary.Write(&buf, binary.LittleEndian, uint32(0))
+	binary.Write(&buf, binary.LittleEndian, uint32(0))
+	// XOR mask — BGRA, bottom-up
+	for y := b.Max.Y - 1; y >= b.Min.Y; y-- {
+		for x := b.Min.X; x < b.Max.X; x++ {
+			c := img.NRGBAAt(x, y)
+			buf.WriteByte(c.B)
+			buf.WriteByte(c.G)
+			buf.WriteByte(c.R)
+			buf.WriteByte(c.A)
+		}
+	}
+	// AND mask — tümü sıfır (alfa kanalı geçerli)
+	buf.Write(make([]byte, maskStride*h))
+	return buf.Bytes()
 }
 
 // iconCacheDir — ICO dosyalarının kalıcı olarak saklandığı dizin.
