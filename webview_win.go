@@ -117,11 +117,12 @@ func wvApplyDWMShadow(hwnd uintptr) {
 		uintptr(unsafe.Pointer(&round)), 4)
 }
 
-// wvSetTaskbarIcon — ICO'yu geçici dosyaya yazar, HICON yükler, WM_SETICON gönderir.
+// wvSetTaskbarIcon — Windows GDI+ ile üretilmiş ICO'yu HICON'a çevirir, WM_SETICON gönderir.
 func wvSetTaskbarIcon(hwnd uintptr) {
-	icoBytes := makeICOBytes(true)
+	// rawICOBytes: embed edilmiş Windows HighQualityBicubic ICO (tüm DPI boyutları)
+	icoBytes := rawICOBytes
 	if len(icoBytes) == 0 {
-		return
+		icoBytes = makeICOBytes(true) // fallback: runtime üretim
 	}
 	f, err := os.CreateTemp("", "spac3dpi_*.ico")
 	if err != nil {

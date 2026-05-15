@@ -17,6 +17,12 @@ import (
 //go:embed icon.png
 var rawLogoBytes []byte
 
+// rawICOBytes — Windows GDI+ HighQualityBicubic ile üretilmiş çok boyutlu ICO.
+// 16/20/24/32/40/48/64/128/256px — tüm DPI ölçekleri için.
+//
+//go:embed icon.ico
+var rawICOBytes []byte
+
 // resizeLogo — CatmullRom bicubic ile src'yi sz×sz'ye ölçekler.
 // Box-filter'a göre kenarleri korur, pikselleşme olmaz.
 func resizeLogo(src image.Image, sz int) *image.NRGBA {
@@ -127,6 +133,7 @@ func drawStatusDot(img *image.NRGBA, sz int, active bool) {
 }
 
 // makeTrayICOBytes — tray için durum noktası eklenmiş ICO üretir.
+// 16/20/24/32/48px: tüm Windows DPI ölçekleri (100%→300%) kapsanır.
 func makeTrayICOBytes(active bool) []byte {
 	src, err := png.Decode(bytes.NewReader(rawLogoBytes))
 	if err != nil {
@@ -135,7 +142,7 @@ func makeTrayICOBytes(active bool) []byte {
 	if !active {
 		src = dimLogo(src)
 	}
-	sizes := []int{256, 48, 32, 16}
+	sizes := []int{48, 32, 24, 20, 16}
 	var pngs [][]byte
 	for _, sz := range sizes {
 		resized := resizeLogo(src, sz)

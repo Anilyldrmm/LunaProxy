@@ -200,12 +200,17 @@ func findPython(client *ssh.Client) (bin, cgiModule string, ok bool) {
 	return "", "", false
 }
 
-// getSudoPrefix — SSH kullanıcısı root değilse "sudo " döner.
-// Yönetici kullanıcı root yetkisiyle SSH açmışsa boş döner.
+// getSudoPrefix — SSH kullanıcısı root değilse ve sudo mevcutsa "sudo " döner.
+// sudo yoksa (çoğu consumer router) boş döner — admin kullanıcı /tmp yazabilir.
 func getSudoPrefix(client *ssh.Client) string {
 	out, _ := sshRun(client, "id -u")
 	if strings.TrimSpace(out) == "0" {
-		return ""
+		return "" // zaten root
+	}
+	// sudo mevcut mu?
+	sudoPath, _ := sshRun(client, "command -v sudo 2>/dev/null || which sudo 2>/dev/null")
+	if strings.TrimSpace(sudoPath) == "" {
+		return "" // sudo yok; admin kullanıcı /tmp'ye doğrudan yazabilir
 	}
 	return "sudo "
 }
