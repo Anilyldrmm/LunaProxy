@@ -108,11 +108,26 @@ func DownloadAndReplace(downloadURL string) error {
 	}
 
 	ps1 := filepath.Join(tmpDir, "LunaProxy_update.ps1")
-	script := fmt.Sprintf(`Start-Sleep -Seconds 2
-Copy-Item -Force "%s" "%s"
-Start-Process "%s"
-Remove-Item "%s" -ErrorAction SilentlyContinue
-`, newExe, selfExe, selfExe, ps1)
+	// UTF-8 BOM zorunlu: PowerShell 5.x BOM olmadan Windows-1252 okur,
+	// non-ASCII yollar (örn. "Masaüstü") bozulur ve Copy-Item başarısız olur.
+	const utf8BOM = "\xEF\xBB\xBF"
+	script := utf8BOM + fmt.Sprintf(`$src = '%s'
+$dst = '%s'
+$ps1path = '%s'
+Start-Sleep -Seconds 2
+$ok = $false
+for ($i = 0; $i -lt 10; $i++) {
+    try {
+        Copy-Item -Force $src $dst -ErrorAction Stop
+        $ok = $true
+        break
+    } catch {
+        Start-Sleep -Seconds 1
+    }
+}
+if ($ok) { Start-Process $dst }
+Remove-Item $ps1path -ErrorAction SilentlyContinue
+`, newExe, selfExe, ps1)
 	if err := os.WriteFile(ps1, []byte(script), 0644); err != nil {
 		return err
 	}
