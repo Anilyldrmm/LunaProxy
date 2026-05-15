@@ -5,6 +5,38 @@
 <title>LunaProxy — UI Demo</title>
 <style>
 :root {
+  /* Nötr Karanlık (varsayılan) */
+  --bg: #0F1012;
+  --surface: #171A1D;
+  --surface2: #1E2226;
+  --surface3: #252A30;
+  --accent: #3B82F6;
+  --accent-bright: #60A5FA;
+  --accent-glow: #93C5FD;
+  --green: #22C55E;
+  --red: #EF4444;
+  --text: #E8EAED;
+  --sub: #6B7280;
+  --border: #2A2F36;
+  /* Alfa yardımcıları */
+  --a-08: rgba(59,130,246,.08);
+  --a-10: rgba(59,130,246,.10);
+  --a-15: rgba(59,130,246,.15);
+  --a-20: rgba(59,130,246,.20);
+  --a-25: rgba(59,130,246,.25);
+  --a-30: rgba(59,130,246,.30);
+  --a-35: rgba(59,130,246,.35);
+  --a-38: rgba(59,130,246,.38);
+  --a-40: rgba(59,130,246,.40);
+  --a-45: rgba(59,130,246,.45);
+  --a-55: rgba(59,130,246,.55);
+  --a-60: rgba(59,130,246,.60);
+  --a-65: rgba(59,130,246,.65);
+  --a-70: rgba(59,130,246,.70);
+  --btn-grad: linear-gradient(135deg,#2563EB,#1D4ED8);
+  --body-bg: #0F1012;
+}
+:root.theme-purple {
   --bg: #0D0B14;
   --surface: #13101E;
   --surface2: #1A1628;
@@ -12,15 +44,29 @@
   --accent: #8B3FBF;
   --accent-bright: #A855F7;
   --accent-glow: #C084FC;
-  --green: #22C55E;
-  --red: #EF4444;
   --text: #F1F0F5;
   --sub: #6B6490;
   --border: #2A2240;
+  --a-08: rgba(168,85,247,.08);
+  --a-10: rgba(168,85,247,.10);
+  --a-15: rgba(139,63,191,.15);
+  --a-20: rgba(139,63,191,.20);
+  --a-25: rgba(139,63,191,.25);
+  --a-30: rgba(168,85,247,.30);
+  --a-35: rgba(168,85,247,.35);
+  --a-38: rgba(139,63,191,.38);
+  --a-40: rgba(139,63,191,.40);
+  --a-45: rgba(139,63,191,.45);
+  --a-55: rgba(139,63,191,.55);
+  --a-60: rgba(139,63,191,.60);
+  --a-65: rgba(139,63,191,.65);
+  --a-70: rgba(168,85,247,.70);
+  --btn-grad: linear-gradient(135deg,#8B3FBF,#6B21A8);
+  --body-bg: radial-gradient(ellipse at 50% 40%,#1a1035 0%,#08060f 100%);
 }
 * { margin:0; padding:0; box-sizing:border-box; }
 body {
-  background: radial-gradient(ellipse at 50% 40%, #1a1035 0%, #08060f 100%);
+  background: var(--body-bg);
   display:flex; align-items:center; justify-content:center;
   min-height:100vh;
   font-family:'Segoe UI',system-ui,sans-serif;
@@ -87,9 +133,9 @@ body {
   transition:background .15s,color .15s,box-shadow .15s;
   position:relative;
 }
-.nav:hover { background:rgba(168,85,247,.1); color:var(--accent-glow); }
+.nav:hover { background:var(--a-10); color:var(--accent-glow); }
 .nav.active {
-  background:rgba(139,63,191,.2); color:var(--accent-bright);
+  background:var(--a-20); color:var(--accent-bright);
   box-shadow:inset 3px 0 0 var(--accent-bright);
 }
 .nav svg { width:20px; height:20px; }
@@ -143,13 +189,13 @@ body {
   transition:border-color .4s,box-shadow .4s;
 }
 .logo-ring.on {
-  border-color:rgba(168,85,247,.5);
-  box-shadow:0 0 28px rgba(139,63,191,.4);
+  border-color:var(--a-35);
+  box-shadow:0 0 28px var(--a-40);
   animation:ringPulse 2.5s ease-in-out infinite;
 }
 @keyframes ringPulse {
-  0%,100% { box-shadow:0 0 14px rgba(139,63,191,.25); border-color:rgba(168,85,247,.3); }
-  50%      { box-shadow:0 0 36px rgba(139,63,191,.6); border-color:rgba(168,85,247,.7); }
+  0%,100% { box-shadow:0 0 14px var(--a-25); border-color:var(--a-30); }
+  50%      { box-shadow:0 0 36px var(--a-60); border-color:var(--a-70); }
 }
 .logo-box {
   width:84px; height:84px; border-radius:20px;
@@ -161,7 +207,7 @@ body {
   transition:box-shadow .4s;
 }
 .logo-box.on {
-  box-shadow:0 0 0 2px rgba(168,85,247,.35),0 10px 40px rgba(139,63,191,.6);
+  box-shadow:0 0 0 2px var(--a-35),0 10px 40px var(--a-60);
 }
 .logo-box::after {
   content:''; position:absolute; inset:0;
@@ -189,19 +235,19 @@ body {
 /* Toggle button */
 .toggle-btn {
   width:100%; height:50px; border-radius:50px; border:none;
-  background:linear-gradient(135deg,#8B3FBF,#6B21A8);
+  background:var(--btn-grad);
   color:#fff; font-size:14px; font-weight:700; letter-spacing:.5px;
   cursor:pointer; display:flex; align-items:center; justify-content:center; gap:9px;
   transition:all .2s; margin-bottom:16px;
-  box-shadow:0 4px 22px rgba(139,63,191,.45);
+  box-shadow:0 4px 22px var(--a-45);
 }
-.toggle-btn:hover { transform:translateY(-2px); box-shadow:0 8px 34px rgba(139,63,191,.65); }
+.toggle-btn:hover { transform:translateY(-2px); box-shadow:0 8px 34px var(--a-65); }
 .toggle-btn:active { transform:translateY(0); }
 .toggle-btn.stop {
   background:linear-gradient(135deg,#DC2626,#991B1B);
   box-shadow:0 4px 22px rgba(239,68,68,.4);
 }
-.toggle-btn.stop:hover { box-shadow:0 8px 34px rgba(239,68,68,.55); }
+.toggle-btn.stop:hover { box-shadow:0 8px 34px rgba(239,68,68,.6); }
 
 /* Stats */
 .stats { display:flex; justify-content:space-around; margin-bottom:14px; }
@@ -224,7 +270,7 @@ body {
 .ph-title { font-size:15px; font-weight:700; color:var(--text); }
 .ph-badge {
   font-size:11px; font-weight:600; color:var(--accent-bright);
-  background:rgba(168,85,247,.15); padding:3px 10px; border-radius:20px;
+  background:var(--a-15); padding:3px 10px; border-radius:20px;
 }
 .device {
   background:var(--surface); border:1px solid var(--border); border-radius:10px;
@@ -237,10 +283,10 @@ body {
   from { opacity:0; transform:translateY(-6px); }
   to   { opacity:1; transform:translateY(0); }
 }
-.device:hover { border-color:rgba(168,85,247,.35); }
+.device:hover { border-color:var(--a-35); }
 .dev-icon {
   width:36px; height:36px; border-radius:9px;
-  background:rgba(139,63,191,.2);
+  background:var(--a-20);
   display:flex; align-items:center; justify-content:center; flex-shrink:0;
   color:var(--accent-bright);
 }
@@ -285,8 +331,8 @@ body {
   border-radius:8px; cursor:pointer; border:1px solid transparent;
   transition:all .15s;
 }
-.radio-item:hover { background:rgba(168,85,247,.08); }
-.radio-item.sel { background:rgba(139,63,191,.15); border-color:rgba(139,63,191,.4); }
+.radio-item:hover { background:var(--a-08); }
+.radio-item.sel { background:var(--a-15); border-color:var(--a-40); }
 .rdot {
   width:16px; height:16px; border-radius:50%; border:2px solid var(--border);
   display:flex; align-items:center; justify-content:center; flex-shrink:0;
@@ -318,17 +364,17 @@ body {
   background:var(--sub); border-radius:50%;
   transition:transform .2s,background .2s;
 }
-.sw input:checked ~ .sw-track { background:rgba(139,63,191,.4); border-color:var(--accent); }
+.sw input:checked ~ .sw-track { background:var(--a-40); border-color:var(--accent); }
 .sw input:checked ~ .sw-track::before { transform:translateX(18px); background:var(--accent-bright); }
 
 .save-btn {
   width:100%; height:44px; border-radius:10px; border:none;
-  background:linear-gradient(135deg,#8B3FBF,#6B21A8);
+  background:var(--btn-grad);
   color:#fff; font-size:13px; font-weight:700; cursor:pointer;
-  margin-top:4px; box-shadow:0 4px 18px rgba(139,63,191,.35);
+  margin-top:4px; box-shadow:0 4px 18px var(--a-35);
   transition:all .2s;
 }
-.save-btn:hover { transform:translateY(-1px); box-shadow:0 6px 26px rgba(139,63,191,.55); }
+.save-btn:hover { transform:translateY(-1px); box-shadow:0 6px 26px var(--a-55); }
 
 /* ── MOBILE panel ── */
 .url-row { display:flex; gap:8px; align-items:center; margin-bottom:12px; }
@@ -339,16 +385,16 @@ body {
 }
 .cp-btn {
   padding:9px 14px; border-radius:8px; border:none;
-  background:rgba(139,63,191,.2); color:var(--accent-bright);
+  background:var(--a-20); color:var(--accent-bright);
   font-size:12px; font-weight:700; cursor:pointer;
   transition:background .15s; white-space:nowrap;
 }
-.cp-btn:hover { background:rgba(139,63,191,.38); }
+.cp-btn:hover { background:var(--a-38); }
 .cp-btn.copied { background:rgba(34,197,94,.2); color:var(--green); }
 .qr-wrap { display:flex; justify-content:center; margin:14px 0; }
 .qr-box {
   width:160px; height:160px; background:#fff; border-radius:12px; padding:10px;
-  box-shadow:0 0 0 1px rgba(168,85,247,.2), 0 8px 32px rgba(0,0,0,.5);
+  box-shadow:0 0 0 1px var(--a-20), 0 8px 32px rgba(0,0,0,.5);
 }
 .instruct {
   background:var(--surface); border:1px solid var(--border);
@@ -517,9 +563,9 @@ window.addEventListener('DOMContentLoaded', function() {
           <div class="ip-label" id="sip" style="opacity:0">192.168.1.41 : 8888</div>
         </div>
 
-        <div id="update-banner" style="display:none;background:rgba(139,63,191,.2);border:1px solid rgba(168,85,247,.4);border-radius:8px;padding:10px 14px;margin-bottom:12px;font-size:12px;color:#A855F7;align-items:center;gap:8px">
+        <div id="update-banner" style="display:none;background:var(--a-20);border:1px solid var(--a-40);border-radius:8px;padding:10px 14px;margin-bottom:12px;font-size:12px;color:var(--accent-bright);align-items:center;gap:8px">
           <span id="update-text"></span>
-          <button onclick="doUpdate()" style="margin-left:auto;padding:5px 12px;border-radius:6px;border:none;background:#8B3FBF;color:#fff;font-size:11px;font-weight:700;cursor:pointer">Güncelle</button>
+          <button onclick="doUpdate()" style="margin-left:auto;padding:5px 12px;border-radius:6px;border:none;background:var(--accent);color:#fff;font-size:11px;font-weight:700;cursor:pointer">Güncelle</button>
         </div>
 
         <button class="toggle-btn" id="tbtn" onclick="toggle()">
@@ -613,6 +659,13 @@ window.addEventListener('DOMContentLoaded', function() {
           <input type="number" id="inp-proxy-port" class="s-input" value="8888">
           <div class="s-label">PAC Portu</div>
           <input type="number" id="inp-pac-port" class="s-input" value="8080">
+        </div>
+        <div class="card">
+          <div class="card-title">Görünüm</div>
+          <div class="radio-group" id="theme-group">
+            <div class="radio-item sel" data-theme="neutral" onclick="setTheme('neutral')"><div class="rdot"></div><div><div class="rtxt">Nötr Karanlık</div><div class="rsub">Gri-siyah, mavi vurgu</div></div></div>
+            <div class="radio-item" data-theme="purple" onclick="setTheme('purple')"><div class="rdot"></div><div><div class="rtxt">Mor</div><div class="rsub">Klasik mor tema</div></div></div>
+          </div>
         </div>
         <button class="save-btn" onclick="saveSettings()">Ayarları Kaydet</button>
       </div>
@@ -723,7 +776,26 @@ function p(n){return String(n).padStart(2,'0')}
 function fmtB(b){if(b<1024)return b+' B';if(b<1048576)return(b/1024).toFixed(1)+' KB';return(b/1048576).toFixed(1)+' MB'}
 
 // Radio
-function selR(el,g){document.querySelectorAll('.radio-item').forEach(r=>r.classList.remove('sel'));el.classList.add('sel');}
+function selR(el,g){el.closest('.radio-group').querySelectorAll('.radio-item').forEach(r=>r.classList.remove('sel'));el.classList.add('sel');}
+
+// Tema
+function applyTheme(t) {
+  document.documentElement.classList.toggle('theme-purple', t === 'purple');
+}
+function setTheme(t) {
+  localStorage.setItem('theme', t);
+  applyTheme(t);
+  document.querySelectorAll('[data-theme]').forEach(function(el) {
+    el.classList.toggle('sel', el.dataset.theme === t);
+  });
+}
+(function initTheme() {
+  var t = localStorage.getItem('theme') || 'neutral';
+  applyTheme(t);
+  document.querySelectorAll('[data-theme]').forEach(function(el) {
+    el.classList.toggle('sel', el.dataset.theme === t);
+  });
+})();
 
 // Save animation
 function savedAnim(btn){

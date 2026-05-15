@@ -33,9 +33,11 @@ func onTrayReady() {
 
 	go func() {
 		for {
-			select {
-			case <-mOpen.ClickedCh:
-				showWindow()
+			func() {
+				defer func() { recover() }() //nolint:errcheck
+				select {
+				case <-mOpen.ClickedCh:
+					showWindow()
 			case <-trayStart.ClickedCh:
 				if err := g.start(); err != nil {
 					logError("Tray başlatma hatası: " + err.Error())
@@ -64,10 +66,10 @@ func onTrayReady() {
 				}()
 			case <-mQuit.ClickedCh:
 				appExiting = true
-				g.shutdown()
 				systray.Quit()
 				os.Exit(0)
 			}
+			}()
 		}
 	}()
 }
