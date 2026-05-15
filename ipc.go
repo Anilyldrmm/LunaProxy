@@ -16,6 +16,9 @@ import (
 // pendingUpdateTag — güncelleme varsa set edilir; pushStatus payload'una eklenir.
 var pendingUpdateTag atomic.Value
 
+// lastLogSent — pushLogs'un son gönderdiği log index'i (dedup için).
+var lastLogSent atomic.Int64
+
 // handleIPCMessage — JS'den gelen goMessage çağrılarını işler.
 func handleIPCMessage(data string) {
 	var msg struct {
@@ -53,6 +56,7 @@ func handleIPCMessage(data string) {
 
 	case "clearLogs":
 		appLog.Clear()
+		lastLogSent.Store(0)
 
 	case "copyToClipboard":
 		var p struct {
@@ -123,20 +127,22 @@ func pushStatus() {
 	evalJS(fmt.Sprintf(`updateStatus(%s)`, data))
 }
 
-// pushLogs — son log girişlerini UI'a gönderir.
+// pushLogs — sadece yeni log girişlerini UI'a gönderir (dedup için pozisyon takibi).
 func pushLogs() {
 	all := appLog.All()
-	if len(all) == 0 {
+	last := int(lastLogSent.Load())
+	if len(all) <= last {
 		return
 	}
-	// Son 50 girişi al
-	if len(all) > 50 {
-		all = all[len(all)-50:]
+	newEntries := all[last:]
+	if len(newEntries) == 0 {
+		return
 	}
-	data, err := json.Marshal(all)
+	data, err := json.Marshal(newEntries)
 	if err != nil {
 		return
 	}
+	lastLogSent.Store(int64(len(all)))
 	evalJS(fmt.Sprintf(`appendLogs(%s)`, data))
 }
 

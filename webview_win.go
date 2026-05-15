@@ -66,16 +66,16 @@ func initWindow() {
 	wvCenterWindow(hwnd, 400, 640)
 	wvApplyDWMShadow(hwnd)
 
-	// Logo inject — wv.SetHtml'den önce
+	// Logo inject — sayfa yüklenmeden önce window.__logoB64 hazır olsun
 	logoB64 := logoBase64()
 	wv.Init(fmt.Sprintf(`window.__logoB64 = "%s";`, logoB64))
+
+	// IPC mesaj handler'ı ÖNCE bağla — SetHtml'den önce bağlanmalı
+	wv.Bind("goMessage", handleIPCMessage) //nolint:errcheck
 
 	// UI HTML yükle
 	html := string(uiHTMLBytes)
 	wv.SetHtml(html)
-
-	// IPC mesaj handler'ı bağla
-	wv.Bind("goMessage", handleIPCMessage) //nolint:errcheck
 
 	// Status/log push ticker başlat
 	go startIPCTicker()
