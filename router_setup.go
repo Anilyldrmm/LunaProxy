@@ -135,7 +135,7 @@ func sshWriteFile(client *ssh.Client, path, content string) error {
 // ── Tespit ──────────────────────────────────────────────────────────────────
 
 func isOpenWrt(client *ssh.Client) bool {
-	out, err := sshRun(client, "cat /etc/openwrt_release 2>/dev/null | head -1")
+	out, err := sshRun(client, "head -1 /etc/openwrt_release 2>/dev/null")
 	return err == nil && strings.Contains(out, "OpenWrt")
 }
 
@@ -202,7 +202,9 @@ func RouterInstall(cfg RouterSetupCfg, progress func(RouterStep)) error {
 			return fmt.Errorf("%s yazılamadı: %w", f.path, err)
 		}
 		if f.exec {
-			sshRun(client, fmt.Sprintf("chmod +x %s", f.path))
+			if _, err := sshRun(client, fmt.Sprintf("chmod +x '%s'", f.path)); err != nil {
+				return fmt.Errorf("%s için chmod başarısız: %w", f.path, err)
+			}
 		}
 	}
 	progress(RouterStep{"Scriptler yazıldı", "ok"})
