@@ -107,10 +107,12 @@ func buildPACMux(localIP string, port int) *http.ServeMux {
 	setupURL := fmt.Sprintf("http://%s:%d/setup", localIP, port)
 	_ = setupURL
 
+	routerPACURL := fmt.Sprintf("http://%s:8090/proxy.pac", guessGatewayIP(localIP))
+
 	mux.HandleFunc("/setup", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
 		w.Header().Set("Cache-Control", "no-store")
-		fmt.Fprintf(w, setupPageHTML, pacURL, pacURL)
+		fmt.Fprintf(w, setupPageHTML, routerPACURL, routerPACURL, pacURL)
 	})
 
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
@@ -128,49 +130,54 @@ const setupPageHTML = `<!DOCTYPE html>
 *{margin:0;padding:0;box-sizing:border-box}
 body{font-family:system-ui,sans-serif;background:#0D0B14;color:#F1F0F5;min-height:100vh;
   display:flex;align-items:center;justify-content:center;padding:20px}
-.card{background:#13101E;border:1px solid #2A2240;border-radius:16px;padding:28px;max-width:420px;width:100%%}
+.card{background:#13101E;border:1px solid #2A2240;border-radius:16px;padding:28px;max-width:440px;width:100%%}
 h1{font-size:20px;font-weight:700;margin-bottom:4px}
-.sub{font-size:13px;color:#6B6490;margin-bottom:24px}
+.sub{font-size:13px;color:#6B6490;margin-bottom:20px}
 .label{font-size:11px;text-transform:uppercase;letter-spacing:1px;color:#6B6490;margin-bottom:6px;font-weight:600}
+.badge{display:inline-block;font-size:10px;font-weight:700;padding:2px 7px;border-radius:4px;
+  background:rgba(34,197,94,.15);color:#22c55e;border:1px solid rgba(34,197,94,.3);margin-bottom:6px}
+.badge.fallback{background:rgba(107,100,144,.15);color:#6B6490;border-color:rgba(107,100,144,.3)}
 .url-box{background:#1A1628;border:1px solid #2A2240;border-radius:8px;padding:10px 12px;
   font-family:monospace;font-size:12px;word-break:break-all;color:#A855F7;margin-bottom:8px}
-.copy-btn{width:100%%;padding:12px;border-radius:8px;border:none;
+.copy-btn{width:100%%;padding:11px;border-radius:8px;border:none;
   background:linear-gradient(135deg,#8B3FBF,#6B21A8);color:#fff;
-  font-size:14px;font-weight:700;cursor:pointer;margin-bottom:24px}
-.section{margin-bottom:20px}
-.section h2{font-size:13px;font-weight:700;margin-bottom:10px;color:#A855F7}
-.step{font-size:13px;color:#6B6490;padding:4px 0;padding-left:16px;position:relative}
+  font-size:13px;font-weight:700;cursor:pointer;margin-bottom:20px}
+.section{margin-bottom:18px}
+.section h2{font-size:13px;font-weight:700;margin-bottom:8px;color:#A855F7}
+.step{font-size:13px;color:#6B6490;padding:3px 0;padding-left:16px;position:relative}
 .step::before{content:"→";position:absolute;left:0;color:#8B3FBF}
 .copied{background:linear-gradient(135deg,#16a34a,#15803d)!important}
+hr{border:none;border-top:1px solid #2A2240;margin:16px 0}
 </style></head>
 <body><div class="card">
-<h1>🟣 SpAC3DPI Kurulum</h1>
-<p class="sub">Proxy ayarı için PAC URL'ini kopyalayın ve talimatları izleyin.</p>
-<div class="label">PAC URL</div>
-<div class="url-box" id="url">%s</div>
-<button class="copy-btn" onclick="cp()">Kopyala</button>
-<div class="section"><h2>📱 Android</h2>
-<div class="step">Wi-Fi ayarlarına girin</div>
-<div class="step">Bağlı ağa uzun basın → Ağı değiştir</div>
-<div class="step">Gelişmiş seçenekler → Proxy: Otomatik</div>
-<div class="step">PAC URL'ini yapıştırın → Kaydedin</div></div>
-<div class="section"><h2>🍎 iOS</h2>
-<div class="step">Ayarlar → Wi-Fi açın</div>
-<div class="step">Bağlı ağın yanındaki ⓘ simgesine basın</div>
-<div class="step">HTTP Proxy → Otomatik seçin</div>
-<div class="step">PAC URL'ini yapıştırın → Kaydedin</div></div>
-<div class="section"><h2>💻 Windows</h2>
-<div class="step">Ayarlar → Ağ ve İnternet → Proxy</div>
-<div class="step">Kurulum betiği kullan → Açık</div>
-<div class="step">Betik adresi: PAC URL'ini yapıştırın</div>
-<div class="step">Kaydet</div></div>
+<h1>SpAC3DPI Kurulum</h1>
+<p class="sub">Proxy ayari icin asagidaki URL'yi kopyalayin.</p>
+<div class="badge">ONERILEN — Router (her zaman erisebilir)</div>
+<div class="url-box" id="rurl">%s</div>
+<button class="copy-btn" id="rbtn" onclick="cp('rurl','rbtn')">Kopyala</button>
+<div class="badge fallback">YEDEK — Sadece PC acikken</div>
+<div class="url-box" id="purl">%s</div>
+<hr>
+<div class="section"><h2>Android</h2>
+<div class="step">Wi-Fi ayarlari → Bağli ağa uzun bas → Aği degistir</div>
+<div class="step">Gelismis secenekler → Proxy: Otomatik</div>
+<div class="step">PAC URL → Kaydet</div></div>
+<div class="section"><h2>iOS</h2>
+<div class="step">Ayarlar → Wi-Fi → Bağli ağin yanindaki (i)</div>
+<div class="step">HTTP Proxy → Otomatik</div>
+<div class="step">URL alani → yapistir → Kaydet</div></div>
+<div class="section"><h2>Windows</h2>
+<div class="step">Ayarlar → Ağ ve Internet → Proxy</div>
+<div class="step">Kurulum betigi kullan → URL alanina yapistir → Kaydet</div></div>
 </div>
 <script>
-function cp(){
-  navigator.clipboard.writeText('%s').then(()=>{
-    var b=document.querySelector('.copy-btn');
-    b.textContent='✔ Kopyalandı';b.classList.add('copied');
-    setTimeout(()=>{b.textContent='Kopyala';b.classList.remove('copied')},2000);
+function cp(id,btn){
+  var url=document.getElementById(id).textContent.trim();
+  navigator.clipboard.writeText(url).then(function(){
+    var b=document.getElementById(btn);
+    var orig=b.textContent;
+    b.textContent='Kopyalandi';b.classList.add('copied');
+    setTimeout(function(){b.textContent=orig;b.classList.remove('copied');},2000);
   });
 }
 </script></body></html>`

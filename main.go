@@ -102,6 +102,7 @@ func (a *app) start() error {
 	// PAC içeriğini proxy moduna al; router'a da bildir
 	setPACRunning(a.localIP, c.ProxyPort)
 	go pushRouterPAC(a.localIP, "proxy", c.ProxyPort)
+	startRouterHeartbeat(guessGatewayIP(a.localIP))
 
 	if c.DNSMode != "unchanged" && c.DNSMode != "" {
 		go func() {
@@ -156,7 +157,8 @@ func (a *app) stop() {
 		return
 	}
 
-	// 1. PAC'ı önce DIRECT yap — iOS yeni PAC'ı hemen çekebilsin.
+	// 1. Heartbeat durdur + PAC'ı DIRECT yap
+	stopRouterHeartbeat()
 	setPACDirect()
 
 	// 2. Durumu hemen stopped'a al — watchdog ve UI güncellenir.

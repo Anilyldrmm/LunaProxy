@@ -150,17 +150,20 @@ func pushLogs() {
 func pushQR() {
 	c := getConfig()
 	setupURL := fmt.Sprintf("http://%s:%d/setup", g.localIP, c.PACPort)
-	pacURL := fmt.Sprintf("http://%s:%d/proxy.pac", g.localIP, c.PACPort)
+	pcPACURL := fmt.Sprintf("http://%s:%d/proxy.pac", g.localIP, c.PACPort)
+	routerPACURL := fmt.Sprintf("http://%s:8090/proxy.pac", guessGatewayIP(g.localIP))
 
-	png, err := qrcode.Encode(setupURL, qrcode.High, 200)
+	// QR → router PAC URL (önerilen)
+	png, err := qrcode.Encode(routerPACURL, qrcode.High, 200)
 	if err != nil {
 		return
 	}
 	b64 := base64.StdEncoding.EncodeToString(png)
 	data, _ := json.Marshal(map[string]string{
-		"setupUrl": setupURL,
-		"pcUrl":    pacURL,
-		"qrBase64": b64,
+		"setupUrl":     setupURL,
+		"pcUrl":        pcPACURL,
+		"routerUrl":    routerPACURL,
+		"qrBase64":     b64,
 	})
 	evalJS(fmt.Sprintf(`updateQR(%s)`, data))
 }

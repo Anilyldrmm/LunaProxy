@@ -590,14 +590,14 @@ window.addEventListener('DOMContentLoaded', function() {
       <!-- MOBILE -->
       <div class="panel" id="panel-mobile">
         <div class="card">
-          <div class="card-title">Router PAC URL (Önerilen)</div>
+          <div class="card-title">Router PAC URL <span style="font-size:10px;color:#22c55e;font-weight:400">(Önerilen — PC kapalıyken de çalışır)</span></div>
           <div class="url-row">
-            <input class="url-in" value="http://192.168.1.1:8080/proxy.pac" readonly>
+            <input class="url-in" id="inp-router-url" value="http://192.168.1.1:8090/proxy.pac" readonly>
             <button class="cp-btn" onclick="copyAnim(this, this.previousElementSibling.value)">Kopyala</button>
           </div>
-          <div class="card-title">PC PAC URL (Alternatif)</div>
+          <div class="card-title" style="margin-top:10px">PC PAC URL <span style="font-size:10px;color:#6B6490;font-weight:400">(Sadece PC açıkken)</span></div>
           <div class="url-row">
-            <input class="url-in" value="http://192.168.1.41:8080/proxy.pac" readonly>
+            <input class="url-in" id="inp-pc-url" value="http://192.168.1.41:8080/proxy.pac" readonly>
             <button class="cp-btn" onclick="copyAnim(this, this.previousElementSibling.value)">Kopyala</button>
           </div>
         </div>
@@ -811,9 +811,10 @@ function updateQR(data) {
   img.style.cssText = 'width:160px;height:160px;border-radius:12px;display:block;margin:0 auto;';
   img.id = 'qrc';
   if (!parent.querySelector('img')) { parent.replaceChild(img, wrap); }
-  var inputs = document.querySelectorAll('.url-in');
-  if (inputs[0]) inputs[0].value = data.pcUrl || '';
-  if (inputs[1]) inputs[1].value = data.pcUrl || '';
+  var ri = document.getElementById('inp-router-url');
+  if (ri && data.routerUrl) ri.value = data.routerUrl;
+  var pi = document.getElementById('inp-pc-url');
+  if (pi && data.pcUrl) pi.value = data.pcUrl;
 }
 
 function loadSettings(cfg) {
