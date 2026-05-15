@@ -29,6 +29,9 @@ type StatusPayload struct {
 	DNSMode     string
 	DNSName     string
 	SetSysProxy bool
+	SetupURL    string       `json:"setupUrl"`
+	UpdateTag   string       `json:"updateTag"`
+	Devices     []DeviceInfo `json:"devices"`
 }
 
 func buildStatus() StatusPayload {
@@ -95,5 +98,7 @@ func buildStatus() StatusPayload {
 		DNSMode:     c.DNSMode,
 		DNSName:     dnsName,
 		SetSysProxy: c.SetSystemProxy,
+		SetupURL:    fmt.Sprintf("http://%s:%d/setup", ip, c.PACPort),
+		Devices:     GetDevices(),
 	}
 }
