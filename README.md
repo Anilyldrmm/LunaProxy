@@ -12,7 +12,7 @@ Engellenen sitelere PC'den ve aynı Wi-Fi ağındaki tüm cihazlardan (telefon, 
 [![Platform](https://img.shields.io/badge/platform-Windows%2010%2F11-0078D4?style=flat-square&logo=windows)](https://github.com/Anilyldrmm/LunaProxy/releases/latest)
 [![License](https://img.shields.io/badge/license-MIT-green?style=flat-square)](LICENSE)
 
-[⬇️ İndir](#kurulum) · [Nasıl Çalışır?](#nasıl-çalışır) · [Router Kurulumu](#router-kurulumu) · [Kaynak Koddan Derleme](#kaynak-koddan-derleme)
+[⬇️ İndir](#kurulum) · [Nasıl Çalışır?](#nasıl-çalışır) · [Router Kurulumu](#router-kurulumu)
 
 </div>
 
@@ -117,56 +117,6 @@ LunaProxy SSH üzerinden router'ınıza bağlanır ve gerekli scriptleri otomati
 <div align="center">
 <img src="docs/screenshot.png" width="100%" alt="LunaProxy Ekran Görüntüleri">
 </div>
-
----
-
-## Kaynak Koddan Derleme
-
-### Gereksinimler
-
-- Go 1.21+
-- Microsoft Edge WebView2 Runtime (geliştirme ortamında da gerekli)
-- `rsrc` aracı: `go install github.com/akavel/rsrc@latest`
-
-### Adımlar
-
-```powershell
-# Repoyu klonla
-git clone https://github.com/Anilyldrmm/LunaProxy.git
-cd LunaProxy
-
-# Bağımlılıkları indir
-go mod download
-
-# Derleme (GoodbyeDPI gömülü)
-go build -tags withbundle -ldflags "-H windowsgui -s -w" -o LunaProxy.exe .
-
-# Derleme (GoodbyeDPI gömülü değil — test için)
-go build -ldflags "-H windowsgui" -o LunaProxy.exe .
-```
-
-### Installer Oluşturma
-
-[Inno Setup 6](https://jrsoftware.org/isdl.php) kurulduktan sonra:
-
-```powershell
-& "C:\Users\$env:USERNAME\AppData\Local\Programs\Inno Setup 6\ISCC.exe" installer\LunaProxy.iss
-```
-
-Installer `installer\Output\LunaProxy_Setup_vX.X.X.exe` olarak oluşturulur.
-
----
-
-## Teknik Detaylar
-
-| Bileşen | Teknoloji |
-|---------|-----------|
-| Çekirdek | Go 1.21+ |
-| Arayüz | WebView2 (go-webview2) |
-| DPI Bypass Motoru | [GoodbyeDPI](https://github.com/ValdikSS/GoodbyeDPI) |
-| Sistem Tepsisi | fyne.io/systray |
-| Ağ Sürücüsü | WinDivert (GoodbyeDPI içinde) |
-| Router SSH | golang.org/x/crypto/ssh |
 
 ---
 
