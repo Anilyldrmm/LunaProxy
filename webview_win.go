@@ -85,9 +85,9 @@ func initWindow() {
 	wvApplyDWMShadow(hwnd)
 	wvSetTaskbarIcon(hwnd)
 
-	// Logo inject — sayfa yüklenmeden önce window.__logoB64 hazır olsun
+	// Logo + versiyon inject — sayfa yüklenmeden önce hazır olsun
 	logoB64 := logoBase64()
-	wv.Init(fmt.Sprintf(`window.__logoB64 = "%s";`, logoB64))
+	wv.Init(fmt.Sprintf(`window.__logoB64 = "%s"; window.__version = "%s";`, logoB64, Version))
 
 	// IPC mesaj handler'ı ÖNCE bağla — SetHtml'den önce bağlanmalı
 	wv.Bind("goMessage", handleIPCMessage) //nolint:errcheck

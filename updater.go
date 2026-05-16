@@ -6,12 +6,13 @@ import (
 	"io"
 	"net/http"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strconv"
 	"strings"
-	"syscall"
 	"time"
+	"unsafe"
+
+	"golang.org/x/sys/windows"
 )
 
 type ghRelease struct {
@@ -111,8 +112,6 @@ func DownloadAndReplace(downloadURL string) error {
 	// UTF-8 BOM zorunlu: PowerShell 5.x BOM olmadan Windows-1252 okur,
 	// non-ASCII yollar (örn. "Masaüstü") bozulur ve Copy-Item başarısız olur.
 	const utf8BOM = "\xEF\xBB\xBF"
-	// WScript.Shell.Run — hidden PowerShell'den GUI app başlatmak için
-	// Start-Process yerine kullanılır; desktop/window-station gerektirmez.
 	script := utf8BOM + fmt.Sprintf(`$src = '%s'
 $dst = '%s'
 $ps1path = '%s'
@@ -128,9 +127,7 @@ for ($i = 0; $i -lt 10; $i++) {
     }
 }
 if ($ok) {
-    $cmd = '"' + $dst + '"'
-    $s = New-Object -COM 'WScript.Shell'
-    $s.Run($cmd, 1, $false)
+    Start-Process -FilePath $dst
 }
 Remove-Item $ps1path -ErrorAction SilentlyContinue
 `, newExe, selfExe, ps1)
@@ -138,10 +135,24 @@ Remove-Item $ps1path -ErrorAction SilentlyContinue
 		return err
 	}
 
-	cmd := exec.Command("powershell.exe", "-WindowStyle", "Hidden", "-ExecutionPolicy", "Bypass", "-File", ps1)
-	cmd.SysProcAttr = &syscall.SysProcAttr{HideWindow: true, CreationFlags: 0x08000000}
-	if err := cmd.Start(); err != nil {
-		return fmt.Errorf("güncelleme script başlatılamadı: %w", err)
+	// ShellExecuteW ile PowerShell başlat — exec.Command -WindowStyle Hidden
+	// non-interactive session açar ve oradan admin-manifest'li exe başlatılamaz.
+	// ShellExecuteW caller'ın interactive session'ını devralır; Start-Process çalışır.
+	shell32 := windows.NewLazySystemDLL("shell32.dll")
+	shellExecW := shell32.NewProc("ShellExecuteW")
+	op, _ := windows.UTF16PtrFromString("open")
+	exe, _ := windows.UTF16PtrFromString("powershell.exe")
+	args, _ := windows.UTF16PtrFromString("-ExecutionPolicy Bypass -WindowStyle Hidden -File " + ps1)
+	r, _, _ := shellExecW.Call(
+		0,
+		uintptr(unsafe.Pointer(op)),
+		uintptr(unsafe.Pointer(exe)),
+		uintptr(unsafe.Pointer(args)),
+		0,
+		1, // SW_SHOWNORMAL
+	)
+	if r <= 32 {
+		return fmt.Errorf("güncelleme script başlatılamadı (ShellExecute: %d)", r)
 	}
 	os.Exit(0)
 	return nil

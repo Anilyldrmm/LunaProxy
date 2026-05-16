@@ -513,6 +513,10 @@ window.addEventListener('DOMContentLoaded', function() {
     var s1 = document.getElementById('tbl-s'); if (s1) s1.style.display = 'none';
     var s2 = document.getElementById('lbox-s'); if (s2) s2.style.display = 'none';
   }
+  if (window.__version) {
+    var vl = document.getElementById('tb-sub-line');
+    if (vl) vl.textContent = 'v' + window.__version + ' · DPI Bypass Proxy · by SpAC3';
+  }
 });
 </script>
 </head>
@@ -524,7 +528,7 @@ window.addEventListener('DOMContentLoaded', function() {
     <div class="tb-logo"><img class="tb-logo-img" src="" alt="" style="display:none;width:28px;height:28px;object-fit:cover;border-radius:8px"><span id="tbl-s">S</span></div>
     <div>
       <div class="tb-name">LunaProxy</div>
-      <div class="tb-sub">DPI Bypass Proxy &nbsp;·&nbsp; by SpAC3</div>
+      <div class="tb-sub" id="tb-sub-line">DPI Bypass Proxy · by SpAC3</div>
     </div>
     <div class="tb-spacer"></div>
     <div class="tb-btn" onclick="window.goMessage(JSON.stringify({type:'windowMinimize'}))">—</div>
