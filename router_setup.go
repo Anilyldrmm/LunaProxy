@@ -130,13 +130,18 @@ func shQuote(s string) string {
 	return "'" + strings.ReplaceAll(s, "'", `'\''`) + "'"
 }
 
-// sshExec — sudo gerekiyorsa 'sudo sh -c <cmd>' ile çalıştırır.
-// sudo sh -c kullanmak, sudo'nun secure_path kısıtlamasını aşar.
+// sshPath — router SSH exec oturumlarında minimal PATH sorununu önler.
+// Bazı firmware'lerde exec komutu login shell PATH'ini taşımaz; explicit set gerekir.
+const sshPath = "PATH=/opt/bin:/opt/sbin:/bin:/sbin:/usr/bin:/usr/sbin"
+
+// sshExec — her zaman sh -c + explicit PATH ile çalıştırır.
+// sudo gerekiyorsa 'sudo sh -c ...' wrapper'ı kullanır (secure_path aşılır).
 func sshExec(client *ssh.Client, cmd, sudo string) (string, error) {
+	full := sshPath + "; " + cmd
 	if sudo == "" {
-		return sshRun(client, cmd)
+		return sshRun(client, "sh -c "+shQuote(full))
 	}
-	return sshRun(client, "sudo sh -c "+shQuote(cmd))
+	return sshRun(client, "sudo sh -c "+shQuote(full))
 }
 
 // sshWriteFile — dosyayı stdin→cat/tee ile router'a yazar.
@@ -148,10 +153,9 @@ func sshWriteFile(client *ssh.Client, path, content, sudo string) error {
 	defer session.Close()
 	session.Stdin = strings.NewReader(content)
 	if sudo == "" {
-		return session.Run("cat > " + shQuote(path))
+		return session.Run("sh -c " + shQuote(sshPath+"; cat > "+shQuote(path)))
 	}
-	// sudo sh -c 'tee /path > /dev/null' — secure_path sorununu aşar
-	return session.Run("sudo sh -c " + shQuote("tee "+shQuote(path)+" > /dev/null"))
+	return session.Run("sudo sh -c " + shQuote(sshPath+"; tee "+shQuote(path)+" > /dev/null"))
 }
 
 // ── Tespit fonksiyonları ─────────────────────────────────────────────────────
