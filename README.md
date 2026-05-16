@@ -115,7 +115,7 @@ LunaProxy SSH üzerinden router'ınıza bağlanır ve gerekli scriptleri otomati
 ## Ekran Görüntüleri
 
 <div align="center">
-<img src="docs/screenshot_main.png" width="380" alt="Ana Ekran">
+<img src="docs/screenshot.png" width="100%" alt="LunaProxy Ekran Görüntüleri">
 </div>
 
 ---
@@ -186,6 +186,6 @@ MIT — bkz. [LICENSE](LICENSE)
 
 GoodbyeDPI motoru için [ValdikSS](https://github.com/ValdikSS/GoodbyeDPI)'e teşekkürler.
 
-**SpAC3** tarafından yapılmıştır 🛡️
+**LunaProxy**, SpAC3 tarafından geliştirilmektedir.
 
 </div>
