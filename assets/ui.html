@@ -437,6 +437,44 @@ body {
   color:var(--green); font-size:13px; font-weight:700; display:none;
 }
 .rt-done.visible { display:block; }
+.rt-tabs { display:flex; gap:4px; margin-bottom:12px; }
+.rt-tab {
+  flex:1; padding:7px 4px; text-align:center; font-size:11px; font-weight:600;
+  color:var(--sub); background:var(--surface2); border-radius:8px;
+  cursor:pointer; border:1px solid var(--border); transition:.15s;
+}
+.rt-tab.active { background:var(--a-15); color:var(--accent-bright); border-color:var(--a-35); }
+.rt-tab:hover:not(.active) { background:var(--a-08); color:var(--text); }
+.rt-tabcontent { display:none; }
+.rt-tabcontent.active { display:block; }
+.rt-guide-step {
+  display:flex; gap:10px; align-items:flex-start;
+  padding:9px 0; border-bottom:1px solid var(--border); font-size:12px;
+}
+.rt-guide-step:last-child { border-bottom:none; }
+.rt-guide-num {
+  flex-shrink:0; width:20px; height:20px; border-radius:50%;
+  background:var(--a-20); color:var(--accent-bright);
+  font-size:11px; font-weight:700; display:flex; align-items:center; justify-content:center;
+}
+.rt-guide-text { color:var(--text); line-height:1.6; }
+.rt-guide-text b { color:var(--accent-glow); }
+.rt-pac-box {
+  background:var(--surface2); border:1px solid var(--border);
+  border-radius:8px; padding:8px 10px; font-family:Consolas,monospace;
+  font-size:11px; color:var(--accent-bright); margin:6px 0;
+  word-break:break-all; cursor:pointer; transition:.15s;
+}
+.rt-pac-box:hover { border-color:var(--a-35); background:var(--a-08); }
+.rt-os-tabs { display:flex; gap:4px; margin-bottom:10px; }
+.rt-os-tab {
+  padding:4px 10px; font-size:10px; font-weight:600; border-radius:6px;
+  cursor:pointer; color:var(--sub); background:var(--surface3);
+  border:1px solid var(--border); transition:.15s;
+}
+.rt-os-tab.active { background:var(--a-15); color:var(--accent-bright); border-color:var(--a-35); }
+.rt-os-content { display:none; }
+.rt-os-content.active { display:block; }
 
 /* ── LOGS panel ── */
 .log-bar {
@@ -702,30 +740,98 @@ window.addEventListener('DOMContentLoaded', function() {
       <!-- ROUTER -->
       <div class="panel" id="panel-router">
         <div class="ph"><div class="ph-title">Router Entegrasyonu</div></div>
-        <div class="rt-badge">GELİŞMİŞ — OpenWrt + Entware gerektirir</div>
-        <div class="card" style="margin-bottom:10px">
-          <div class="card-title">Ne işe yarar?</div>
-          <div style="font-size:12px;color:var(--sub);line-height:1.7">
-            PC kapalıyken telefon proxy yerine dogrudan (DIRECT) baglanir.
-            Router kurulumu olmadan PC kapalıyken kisa bir gecikme yasanir.
+        <div class="rt-tabs">
+          <div class="rt-tab active" onclick="rtTab(this,'ssh')">SSH Kurulumu</div>
+          <div class="rt-tab" onclick="rtTab(this,'guide')">Cihaz Rehberi</div>
+        </div>
+
+        <!-- SSH Kurulumu -->
+        <div class="rt-tabcontent active" id="rtc-ssh">
+          <div class="rt-badge">GELİŞMİŞ — OpenWrt + Entware gerektirir</div>
+          <div class="card" style="margin-bottom:10px">
+            <div class="card-title">Ne işe yarar?</div>
+            <div style="font-size:12px;color:var(--sub);line-height:1.7">
+              PC kapalıyken telefon proxy yerine dogrudan (DIRECT) baglanir.
+              Router kurulumu olmadan PC kapalıyken kisa bir gecikme yasanir.
+            </div>
+          </div>
+          <div class="s-label">Router Baglantisi</div>
+          <div class="rt-form">
+            <input class="s-input" id="rt-host" placeholder="Router IP (örn: 192.168.1.1)" style="margin-bottom:0">
+            <div class="rt-row">
+              <input class="s-input" id="rt-port" placeholder="SSH Port (22)" style="flex:0 0 110px">
+              <input class="s-input" id="rt-user" placeholder="Kullanici (admin)">
+            </div>
+            <input class="s-input" id="rt-pass" type="password" placeholder="SSH Sifresi" style="margin-bottom:0">
+          </div>
+          <div style="display:flex;gap:8px;margin-bottom:12px">
+            <button class="save-btn" style="flex:1" onclick="routerSetup()">Kur</button>
+            <button class="save-btn" style="flex:0 0 80px;background:var(--surface2);color:var(--sub);box-shadow:none;border:1px solid var(--border)" onclick="routerTest()">Test</button>
+          </div>
+          <div class="rt-steps" id="rt-steps"></div>
+          <div class="rt-done" id="rt-done">
+            Kurulum tamamlandi — Mobil panelden QR kodunu kullanabilirsin
           </div>
         </div>
-        <div class="s-label">Router Baglantisi</div>
-        <div class="rt-form">
-          <input class="s-input" id="rt-host" placeholder="Router IP (örn: 192.168.1.1)" style="margin-bottom:0">
-          <div class="rt-row">
-            <input class="s-input" id="rt-port" placeholder="SSH Port (22)" style="flex:0 0 110px">
-            <input class="s-input" id="rt-user" placeholder="Kullanici (admin)">
+
+        <!-- Cihaz Rehberi -->
+        <div class="rt-tabcontent" id="rtc-guide">
+          <div class="card" style="margin-bottom:10px">
+            <div class="card-title">PAC URL</div>
+            <div style="font-size:11px;color:var(--sub);margin-bottom:6px">
+              Asagidaki URL'yi cihazinizin proxy ayarlarına girin. Tiklayin kopyalayin.
+            </div>
+            <div class="rt-pac-box" id="guide-pac-url" onclick="copyPacUrl()">—</div>
           </div>
-          <input class="s-input" id="rt-pass" type="password" placeholder="SSH Sifresi" style="margin-bottom:0">
-        </div>
-        <div style="display:flex;gap:8px;margin-bottom:12px">
-          <button class="save-btn" style="flex:1" onclick="routerSetup()">Kur</button>
-          <button class="save-btn" style="flex:0 0 80px;background:var(--surface2);color:var(--sub);box-shadow:none;border:1px solid var(--border)" onclick="routerTest()">Test</button>
-        </div>
-        <div class="rt-steps" id="rt-steps"></div>
-        <div class="rt-done" id="rt-done">
-          Kurulum tamamlandi — Mobil panelden QR kodunu kullanabilirsin
+
+          <div class="rt-os-tabs">
+            <div class="rt-os-tab active" onclick="rtOsTab(this,'ios')">iOS</div>
+            <div class="rt-os-tab" onclick="rtOsTab(this,'android')">Android</div>
+            <div class="rt-os-tab" onclick="rtOsTab(this,'dhcp')">DHCP Otomatik</div>
+          </div>
+
+          <!-- iOS -->
+          <div class="rt-os-content active" id="rtos-ios">
+            <div class="card">
+              <div class="card-title">iPhone / iPad</div>
+              <div class="rt-guide-step"><div class="rt-guide-num">1</div><div class="rt-guide-text">Ayarlar → <b>Wi-Fi</b> → agınızın yanındaki <b>ⓘ</b></div></div>
+              <div class="rt-guide-step"><div class="rt-guide-num">2</div><div class="rt-guide-text"><b>Proxy Yapılandır</b> → <b>Otomatik</b> seçin</div></div>
+              <div class="rt-guide-step"><div class="rt-guide-num">3</div><div class="rt-guide-text">URL alanına <b>PAC URL</b>'ini yapıştırın</div></div>
+              <div class="rt-guide-step"><div class="rt-guide-num">4</div><div class="rt-guide-text"><b>Kaydet</b> → Tarayıcıyı açın, test edin</div></div>
+            </div>
+          </div>
+
+          <!-- Android -->
+          <div class="rt-os-content" id="rtos-android">
+            <div class="card">
+              <div class="card-title">Android</div>
+              <div class="rt-guide-step"><div class="rt-guide-num">1</div><div class="rt-guide-text">Ayarlar → <b>Wi-Fi</b> → agınıza uzun basın → <b>Ağı Düzenle</b></div></div>
+              <div class="rt-guide-step"><div class="rt-guide-num">2</div><div class="rt-guide-text"><b>Gelişmiş seçenekler</b> → Proxy: <b>PAC otomatik yapılandırması</b></div></div>
+              <div class="rt-guide-step"><div class="rt-guide-num">3</div><div class="rt-guide-text">PAC URL alanına <b>PAC URL</b>'ini yapıştırın</div></div>
+              <div class="rt-guide-step"><div class="rt-guide-num">4</div><div class="rt-guide-text"><b>Kaydet</b> → Test edin</div></div>
+              <div style="font-size:11px;color:var(--sub);margin-top:8px;line-height:1.6">
+                Bazı Android surumleri (10+) Wi-Fi baskasına geçince proxy sıfırlayabilir. Bu durumda VPN uygulaması deneyin.
+              </div>
+            </div>
+          </div>
+
+          <!-- DHCP Option 252 -->
+          <div class="rt-os-content" id="rtos-dhcp">
+            <div class="card">
+              <div class="card-title">DHCP Option 252 — Tum Agı Otomatik Konfigüre Et</div>
+              <div style="font-size:12px;color:var(--sub);line-height:1.7;margin-bottom:10px">
+                Desteklenen modеmlerde DHCP Option 252 ile PAC URL'ini tüm agа otomatik dagitabilirsiniz. Her cihaza ayrıca ayar yapmanıza gerek kalmaz.
+              </div>
+              <div class="rt-guide-step"><div class="rt-guide-num">1</div><div class="rt-guide-text">Modem arayüzüne girin (genellikle <b>192.168.1.1</b>)</div></div>
+              <div class="rt-guide-step"><div class="rt-guide-num">2</div><div class="rt-guide-text"><b>LAN → DHCP Sunucusu → DHCP Seçenekleri</b> (veya Advanced DHCP Options)</div></div>
+              <div class="rt-guide-step"><div class="rt-guide-num">3</div><div class="rt-guide-text">Yeni seçenek ekle: <b>Kod: 252</b> · Tür: <b>String</b> · Değer: PAC URL</div></div>
+              <div class="rt-guide-step"><div class="rt-guide-num">4</div><div class="rt-guide-text">Kaydet → Cihazları Wi-Fi'den çıkarıp tekrar bağlayın</div></div>
+              <div style="margin-top:10px;padding:8px;background:rgba(245,158,11,.08);border:1px solid rgba(245,158,11,.2);border-radius:8px;font-size:11px;color:#F59E0B;line-height:1.6">
+                <b>Destek:</b> ZTE (F660/F680), TP-Link Archer, ASUS, MikroTik. TTNet'in bazı Huawei modemleri bu ayarı gizlemiş olabilir.
+                iOS ve macOS destekler. Windows/Android tarayıcı bazlıdır.
+              </div>
+            </div>
+          </div>
         </div>
       </div>
 
@@ -824,6 +930,36 @@ function saveSettings() {
 // Clear logs
 function clearLogs() { window.goMessage(JSON.stringify({type:'clearLogs'})); }
 
+function rtTab(el, id) {
+  el.closest('.rt-tabs').querySelectorAll('.rt-tab').forEach(function(t){t.classList.remove('active');});
+  el.classList.add('active');
+  document.querySelectorAll('.rt-tabcontent').forEach(function(c){c.classList.remove('active');});
+  document.getElementById('rtc-'+id).classList.add('active');
+}
+function rtOsTab(el, id) {
+  el.closest('.rt-os-tabs').querySelectorAll('.rt-os-tab').forEach(function(t){t.classList.remove('active');});
+  el.classList.add('active');
+  document.querySelectorAll('.rt-os-content').forEach(function(c){c.classList.remove('active');});
+  document.getElementById('rtos-'+id).classList.add('active');
+}
+function copyPacUrl() {
+  var box = document.getElementById('guide-pac-url');
+  if (!box) return;
+  var url = box.textContent.trim();
+  if (!url || url === '—') return;
+  if (navigator.clipboard) {
+    navigator.clipboard.writeText(url);
+  } else {
+    var ta = document.createElement('textarea');
+    ta.value = url;
+    document.body.appendChild(ta);
+    ta.select();
+    document.execCommand('copy');
+    document.body.removeChild(ta);
+  }
+  box.style.borderColor='var(--green)';
+  setTimeout(function(){box.style.borderColor='';},1500);
+}
 function routerSetup() {
   var host = document.getElementById('rt-host').value.trim();
   var port = parseInt(document.getElementById('rt-port').value) || 22;
@@ -947,6 +1083,9 @@ function updateStatus(s) {
 
   var devs = s.Devices||s.devices;
   if (devs) updateDevices(devs);
+
+  var pacUrl = s.PACUrl||s.pacUrl||'';
+  if (pacUrl) { var gp = document.getElementById('guide-pac-url'); if (gp) gp.textContent = pacUrl; }
 
   var tag = s.UpdateTag||s.updateTag;
   var url = s.UpdateURL||s.updateURL||'';
