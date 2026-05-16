@@ -34,6 +34,10 @@ type Config struct {
 	AutoStart      bool `json:"auto_start"`       // Windows startup kaydı
 	ProxyAutoStart bool `json:"proxy_auto_start"` // App açılınca proxy'yi otomatik başlat
 
+	// Bypass domain listesi — boşsa tüm trafik proxy'den geçer;
+	// doluysa sadece listedeki domain'ler proxy'ye yönlendirilir.
+	BypassDomains []string `json:"bypass_domains"`
+
 	// UI
 	Theme string `json:"theme"` // "neutral" | "purple"
 }
@@ -61,6 +65,15 @@ var ispPresets = map[string]string{
 	"vodafone":    " --set-ttl 3",        // Vodafone için TTL gerekli
 	"turkcell":    "",                    // standart mod yeterli
 	"auto":        "",                    // otomatik (ISP ek bayrağı yok)
+}
+
+// ispRecommendedMode — ISP'ye göre önerilen DPI bypass modu.
+var ispRecommendedMode = map[string]string{
+	"ttnet":       "powerful",
+	"vodafone":    "powerful",
+	"turkcell":    "balanced",
+	"superonline": "balanced",
+	"auto":        "",
 }
 
 var ispNames = map[string]string{

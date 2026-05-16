@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 	"os"
+	"strings"
 	"sync"
 	"time"
 
@@ -61,6 +62,8 @@ func main() {
 	StartUpdateChecker(func(tag, url string) {
 		pendingUpdateTag.Store(tag)
 		pendingUpdateURL.Store(url)
+		showToast("LunaProxy Güncellemesi", "Yeni sürüm mevcut: "+tag+" — uygulamayı açıp güncelleyin")
+		pushStatus()
 	})
 
 	if c.ProxyAutoStart {
@@ -87,6 +90,9 @@ func (a *app) start() error {
 	// HTTP proxy
 	ps, err := startProxy(c.ProxyPort)
 	if err != nil {
+		if strings.Contains(err.Error(), "bind") || strings.Contains(err.Error(), "Only one usage") || strings.Contains(err.Error(), "address already in use") {
+			return fmt.Errorf("Port %d başka bir uygulama tarafından kullanılıyor — Ayarlar → Ağ Portlarından değiştirin", c.ProxyPort)
+		}
 		return fmt.Errorf("proxy başlatılamadı (port %d): %w", c.ProxyPort, err)
 	}
 
@@ -101,6 +107,9 @@ func (a *app) start() error {
 		cs, err := startPAC(a.localIP, c.PACPort)
 		if err != nil {
 			ps.Close()
+			if strings.Contains(err.Error(), "bind") || strings.Contains(err.Error(), "Only one usage") || strings.Contains(err.Error(), "address already in use") {
+				return fmt.Errorf("PAC portu %d kullanımda — Ayarlar → Ağ Portlarından değiştirin", c.PACPort)
+			}
 			return fmt.Errorf("PAC başlatılamadı (port %d): %w", c.PACPort, err)
 		}
 		a.pacSrv = cs

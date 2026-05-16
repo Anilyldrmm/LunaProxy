@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"net"
+	"sync"
 	"sync/atomic"
 	"time"
 )
@@ -133,4 +134,40 @@ func (w *Watchdog) check() {
 
 func (w *Watchdog) RestartCount() int64 {
 	return atomic.LoadInt64(&w.restart)
+}
+
+// ── Bant genişliği geçmişi (grafik için) ─────────────────────────────────────
+
+type bwHistory struct {
+	mu     sync.Mutex
+	points [60]float64 // son 60 örnek, 2s aralık → 2 dakika penceresi
+	head   int
+	last   int64
+}
+
+var bwHist = &bwHistory{}
+
+// sample — son 2s'deki MB/s değerini ring buffer'a ekler; IPC ticker'dan çağrılır.
+func (h *bwHistory) sample() {
+	cur := atomic.LoadInt64(&stats.totalBytes)
+	h.mu.Lock()
+	delta := cur - h.last
+	if delta < 0 {
+		delta = 0
+	}
+	h.last = cur
+	h.points[h.head] = float64(delta) / (1024 * 1024 * 2) // 2s window → MB/s
+	h.head = (h.head + 1) % 60
+	h.mu.Unlock()
+}
+
+// Snapshot — en eskiden en yeniye 60 MB/s değeri döner.
+func (h *bwHistory) Snapshot() []float64 {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	out := make([]float64, 60)
+	for i := 0; i < 60; i++ {
+		out[i] = h.points[(h.head+i)%60]
+	}
+	return out
 }

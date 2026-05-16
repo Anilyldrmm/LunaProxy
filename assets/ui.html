@@ -308,6 +308,30 @@ body {
 .empty svg { width:40px; height:40px; opacity:.35; }
 .empty p { font-size:13px; }
 
+/* ── Bant genişliği grafiği ── */
+.bw-chart-wrap { margin-bottom:10px; }
+.bw-svg { width:100%; height:56px; display:block; overflow:visible; }
+.bw-footer { display:flex; justify-content:space-between; font-size:10px; color:var(--sub); margin-top:2px; }
+
+/* ── ISP öneri ── */
+.isp-hint {
+  display:none; font-size:11px; color:#F59E0B;
+  background:rgba(245,158,11,.08); border:1px solid rgba(245,158,11,.2);
+  border-radius:7px; padding:7px 10px; margin-top:-6px; margin-bottom:8px; line-height:1.5;
+}
+.isp-hint.vis { display:block; }
+.isp-hint b { cursor:pointer; text-decoration:underline; text-underline-offset:2px; }
+
+/* ── Bypass textarea ── */
+.bypass-ta {
+  width:100%; background:var(--surface2); border:1px solid var(--border);
+  border-radius:8px; color:var(--text); padding:9px 12px; font-size:11px;
+  font-family:Consolas,monospace; outline:none; resize:vertical;
+  min-height:72px; line-height:1.6; margin-bottom:4px;
+}
+.bypass-ta:focus { border-color:var(--accent); }
+.bypass-ta::placeholder { color:var(--sub); }
+
 /* ── SETTINGS panel ── */
 .s-label { font-size:10px; text-transform:uppercase; letter-spacing:.8px; color:var(--sub); font-weight:600; margin-bottom:6px; }
 .s-select {
@@ -645,6 +669,12 @@ window.addEventListener('DOMContentLoaded', function() {
           <div class="kv"><span class="kv-k">Chunk</span><span class="kv-v">40 byte</span></div>
           <div class="kv"><span class="kv-k">ISP</span><span class="kv-v">Otomatik</span></div>
         </div>
+
+        <div class="card bw-chart-wrap">
+          <div class="card-title">Bant Genişliği <span id="bw-cur" style="float:right;font-size:10px;font-weight:400;color:var(--accent-bright)">0.00 MB/s</span></div>
+          <svg id="bw-svg" class="bw-svg" viewBox="0 0 240 56" preserveAspectRatio="none"></svg>
+          <div class="bw-footer"><span>2 dk önce</span><span>Şimdi</span></div>
+        </div>
       </div>
 
       <!-- DEVICES -->
@@ -676,9 +706,28 @@ window.addEventListener('DOMContentLoaded', function() {
         <div class="card">
           <div class="card-title">ISP & DNS</div>
           <div class="s-label">İnternet Sağlayıcı</div>
-          <select class="s-select"><option>Otomatik</option><option>Superonline / UltraNet</option><option>Türk Telekom (TTNet)</option><option>Vodafone TR</option><option>Turkcell</option></select>
+          <select class="s-select" id="sel-isp" onchange="onISPChange(this.value)">
+            <option value="auto">Otomatik</option>
+            <option value="superonline">Superonline / UltraNet</option>
+            <option value="ttnet">Türk Telekom (TTNet)</option>
+            <option value="vodafone">Vodafone TR</option>
+            <option value="turkcell">Turkcell</option>
+          </select>
+          <div class="isp-hint" id="isp-hint">Öneri: <b id="isp-hint-mode" onclick="applyISPSuggestion()"></b> modu — tıklayarak uygula</div>
           <div class="s-label">DNS Şifreleme</div>
-          <select class="s-select"><option>Değiştirilmedi</option><option>Cloudflare (1.1.1.1)</option><option>Google (8.8.8.8)</option><option>AdGuard DNS</option><option>Quad9</option></select>
+          <select class="s-select" id="sel-dns">
+            <option value="unchanged">Değiştirilmedi</option>
+            <option value="cloudflare">Cloudflare (1.1.1.1)</option>
+            <option value="google">Google (8.8.8.8)</option>
+            <option value="adguard">AdGuard DNS</option>
+            <option value="quad9">Quad9</option>
+            <option value="opendns">OpenDNS</option>
+          </select>
+        </div>
+        <div class="card">
+          <div class="card-title">Bypass Domain Listesi <span style="font-size:10px;color:var(--sub);font-weight:400;text-transform:none;letter-spacing:0">— boşsa tüm trafik proxy'den geçer</span></div>
+          <div style="font-size:11px;color:var(--sub);margin-bottom:8px;line-height:1.6">Her satıra bir domain. Sadece bu domainler proxy'ye yönlendirilir, geri kalanı direkt bağlanır.</div>
+          <textarea id="inp-bypass" class="bypass-ta" placeholder="youtube.com&#10;netflix.com&#10;twitch.tv"></textarea>
         </div>
         <div class="card">
           <div class="card-title">Sistem</div>
@@ -920,8 +969,13 @@ function savedAnim(btn){
 
 // Save settings (real IPC)
 function saveSettings() {
+  var bypassRaw = (document.getElementById('inp-bypass') || {value:''}).value || '';
+  var bypassDomains = bypassRaw.split('\n').map(function(s){return s.trim();}).filter(Boolean);
   var cfg = {
     dpi_mode: (document.querySelector('.radio-item.sel[data-val]') || {dataset:{val:'balanced'}}).dataset.val || 'balanced',
+    isp: (document.getElementById('sel-isp') || {value:'auto'}).value || 'auto',
+    dns_mode: (document.getElementById('sel-dns') || {value:'unchanged'}).value || 'unchanged',
+    bypass_domains: bypassDomains,
     set_system_proxy: !!(document.getElementById('sw-sysproxy') || {}).checked,
     auto_start: !!(document.getElementById('sw-autostart') || {}).checked,
     proxy_auto_start: !!(document.getElementById('sw-proxy-autostart') || {}).checked,
@@ -964,6 +1018,67 @@ function copyPacUrl() {
   box.style.borderColor='var(--green)';
   setTimeout(function(){box.style.borderColor='';},1500);
 }
+// ── Bant genişliği grafiği ──────────────────────────────────────────────────
+function updateBWChart(pts) {
+  if (!pts || pts.length < 2) return;
+  var max = Math.max.apply(null, pts);
+  if (max < 0.001) max = 0.001;
+  var W = 240, H = 56, n = pts.length;
+  var step = W / (n - 1);
+  var linePts = '', fillPts = '';
+  for (var i = 0; i < n; i++) {
+    var x = (i * step).toFixed(1);
+    var y = (H - (pts[i] / max) * (H - 4) - 2).toFixed(1);
+    linePts += (i === 0 ? 'M' : 'L') + x + ',' + y;
+    fillPts += (i === 0 ? 'M' : 'L') + x + ',' + y;
+  }
+  fillPts += ' L' + W + ',' + H + ' L0,' + H + ' Z';
+  var svg = document.getElementById('bw-svg');
+  if (!svg) return;
+  svg.innerHTML = '<defs><linearGradient id="bwg" x1="0" y1="0" x2="0" y2="1">'
+    + '<stop offset="0%" stop-color="var(--accent)" stop-opacity="0.45"/>'
+    + '<stop offset="100%" stop-color="var(--accent)" stop-opacity="0.03"/>'
+    + '</linearGradient></defs>'
+    + '<path d="' + fillPts + '" fill="url(#bwg)"/>'
+    + '<path d="' + linePts + '" fill="none" stroke="var(--accent-bright)" stroke-width="1.5" stroke-linejoin="round"/>';
+  var cur = document.getElementById('bw-cur');
+  if (cur) cur.textContent = pts[pts.length - 1].toFixed(2) + ' MB/s';
+}
+
+// ── ISP öneri ───────────────────────────────────────────────────────────────
+var _ispSuggestMode = '';
+var _ispModeNames = {turbo:'Turbo', balanced:'Dengeli', powerful:'Güçlü'};
+function onISPChange(val) {
+  var map = {ttnet:'powerful', vodafone:'powerful', turkcell:'balanced', superonline:'balanced'};
+  var rec = map[val] || '';
+  _ispSuggestMode = rec;
+  var hint = document.getElementById('isp-hint');
+  var hm = document.getElementById('isp-hint-mode');
+  if (!hint) return;
+  if (rec) {
+    hint.classList.add('vis');
+    if (hm) hm.textContent = _ispModeNames[rec] || rec;
+  } else {
+    hint.classList.remove('vis');
+  }
+}
+function showISPSuggestion(isp, mode) {
+  _ispSuggestMode = mode;
+  var hint = document.getElementById('isp-hint');
+  var hm = document.getElementById('isp-hint-mode');
+  if (!hint) return;
+  hint.classList.add('vis');
+  if (hm) hm.textContent = _ispModeNames[mode] || mode;
+}
+function applyISPSuggestion() {
+  if (!_ispSuggestMode) return;
+  document.querySelectorAll('.radio-item[data-val]').forEach(function(el) {
+    el.classList.toggle('sel', el.dataset.val === _ispSuggestMode);
+  });
+  var hint = document.getElementById('isp-hint');
+  if (hint) hint.classList.remove('vis');
+}
+
 function routerSetup() {
   var host = document.getElementById('rt-host').value.trim();
   var port = parseInt(document.getElementById('rt-port').value) || 22;
@@ -1091,6 +1206,9 @@ function updateStatus(s) {
   var pacUrl = s.PACUrl||s.pacUrl||'';
   if (pacUrl) { var gp = document.getElementById('guide-pac-url'); if (gp) gp.textContent = pacUrl; }
 
+  var bwh = s.BandwidthHistory||s.bwHistory;
+  if (bwh) updateBWChart(bwh);
+
   var tag = s.UpdateTag||s.updateTag;
   var url = s.UpdateURL||s.updateURL||'';
   if (tag) showUpdateBanner(tag, url);
@@ -1113,8 +1231,11 @@ function updateDevices(devs) {
     } else {
       var div = document.createElement('div');
       div.className = 'device'; div.dataset.ip = ip;
+      var hn = d.hostname || d.Hostname || '';
+      var displayName = hn || ip;
+      var subLine = hn ? ip : 'Aktif bağlantı';
       div.innerHTML = '<div class="dev-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="5" y="2" width="14" height="20" rx="2"/><circle cx="12" cy="18" r="1" fill="currentColor" stroke="none"/></svg></div>'
-        + '<div style="flex:1"><div class="dev-ip">' + ip + '</div><div class="dev-meta">Aktif bağlantı</div></div>'
+        + '<div style="flex:1"><div class="dev-ip">' + displayName + '</div><div class="dev-meta">' + subLine + '</div></div>'
         + '<div class="dev-right"><div class="dev-data">' + fmtB(bytes) + '</div><div class="dev-conns">' + conns + ' bağlantı</div></div>'
         + '<div class="adot"></div>';
       list.prepend(div);
@@ -1169,6 +1290,15 @@ function loadSettings(cfg) {
   if (pp) pp.value = cfg.proxy_port||cfg.ProxyPort||8888;
   var pacp = document.getElementById('inp-pac-port');
   if (pacp) pacp.value = cfg.pac_port||cfg.PACPort||8080;
+  var ispSel = document.getElementById('sel-isp');
+  if (ispSel) ispSel.value = cfg.isp||cfg.ISP||'auto';
+  var dnsSel = document.getElementById('sel-dns');
+  if (dnsSel) dnsSel.value = cfg.dns_mode||cfg.DNSMode||'unchanged';
+  var bypassTa = document.getElementById('inp-bypass');
+  if (bypassTa) {
+    var domains = cfg.bypass_domains||cfg.BypassDomains||[];
+    bypassTa.value = Array.isArray(domains) ? domains.join('\n') : (domains||'');
+  }
   var savedTheme = cfg.theme||cfg.Theme;
   if (savedTheme && savedTheme !== _currentTheme) applyTheme(savedTheme);
 }

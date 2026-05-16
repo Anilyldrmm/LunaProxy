@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"net"
 	"net/http"
+	"strings"
 	"sync"
 	"time"
 
@@ -20,12 +21,28 @@ var (
 )
 
 // setPACRunning — proxy açıkken PAC'ı proxy+DIRECT moduna alır.
+// BypassDomains doluysa sadece o domain'ler proxy'den geçer; boşsa tüm trafik.
 func setPACRunning(localIP string, proxyPort int) {
+	c := getConfig()
+	proxy := fmt.Sprintf(`"PROXY %s:%d; DIRECT"`, localIP, proxyPort)
+	var body string
+	if len(c.BypassDomains) == 0 {
+		body = fmt.Sprintf(`function FindProxyForURL(url,host){return %s;}`, proxy)
+	} else {
+		var sb strings.Builder
+		sb.WriteString(`function FindProxyForURL(url,host){`)
+		for _, d := range c.BypassDomains {
+			d = strings.TrimSpace(d)
+			if d == "" {
+				continue
+			}
+			sb.WriteString(fmt.Sprintf(`if(dnsDomainIs(host,%q)||host===%q)return %s;`, d, d, proxy))
+		}
+		sb.WriteString(`return "DIRECT";}`)
+		body = sb.String()
+	}
 	pacMu.Lock()
-	pacBody = fmt.Sprintf(
-		`function FindProxyForURL(url,host){return "PROXY %s:%d; DIRECT";}`,
-		localIP, proxyPort,
-	)
+	pacBody = body
 	pacMu.Unlock()
 }
 

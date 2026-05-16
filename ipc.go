@@ -150,6 +150,13 @@ func handleIPCMessage(data string) {
 			setConfig(c) //nolint:errcheck
 		}
 
+	case "ispChanged":
+		var p struct {
+			ISP string `json:"isp"`
+		}
+		json.Unmarshal(msg.Payload, &p) //nolint:errcheck
+		pushISPSuggestion(p.ISP)
+
 	case "requestRouterDefaults":
 		c := getConfig()
 		gateway := guessGatewayIP(g.localIP)
@@ -168,6 +175,7 @@ func startIPCTicker() {
 	ticker := time.NewTicker(2 * time.Second)
 	defer ticker.Stop()
 	for range ticker.C {
+		bwHist.sample()
 		pushStatus()
 		pushLogs()
 	}
@@ -231,10 +239,21 @@ func pushQR() {
 }
 
 // pushSettings — mevcut config'i UI'a gönderir.
+// AutoStart için registry'deki gerçek değer kullanılır.
 func pushSettings() {
 	c := getConfig()
+	c.AutoStart = startupEnabled()
 	data, _ := json.Marshal(c)
 	evalJS(fmt.Sprintf(`loadSettings(%s)`, data))
+}
+
+// pushISPSuggestion — ISP'ye göre önerilen DPI modunu UI'a gönderir.
+func pushISPSuggestion(isp string) {
+	mode := ispRecommendedMode[isp]
+	if mode == "" {
+		return
+	}
+	evalJS(fmt.Sprintf(`showISPSuggestion(%s,%s)`, jsonEscape(isp), jsonEscape(mode)))
 }
 
 // setClipboard — metni Windows clipboard'a yazar.
