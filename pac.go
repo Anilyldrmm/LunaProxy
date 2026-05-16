@@ -45,6 +45,9 @@ func setPACRunning(localIP string, proxyPort int) {
 	pacMu.Lock()
 	pacBody = body
 	pacMu.Unlock()
+
+	gw := guessGatewayIP(localIP)
+	go pushRouterPACBody(gw, body)
 }
 
 // setPACDirect — proxy kapalıyken PAC'ı DIRECT moduna alır.
@@ -67,6 +70,26 @@ func startPAC(localIP string, port int) (*http.Server, error) {
 	go srv.Serve(ln)
 	logInfo(fmt.Sprintf("PAC sunucu başlatıldı → http://%s:%d/proxy.pac", localIP, port))
 	return srv, nil
+}
+
+// pushRouterPACBody — router'daki update_pac.sh'e PAC JavaScript içeriğini POST eder.
+// Router kurulumu yoksa sessizce başarısız olur.
+func pushRouterPACBody(gateway, body string) {
+	if gateway == "" {
+		return
+	}
+	client := &http.Client{Timeout: 5 * time.Second}
+	for _, path := range []string{"/cgi-bin/update_pac.sh", "/update_pac.sh"} {
+		url := fmt.Sprintf("http://%s:8090%s", gateway, path)
+		resp, err := client.Post(url, "text/plain", strings.NewReader(body))
+		if err == nil {
+			ok := resp.StatusCode == 200
+			resp.Body.Close()
+			if ok {
+				return
+			}
+		}
+	}
 }
 
 // pushRouterPAC — PC→Router HTTP CGI ile PAC durumunu günceller.

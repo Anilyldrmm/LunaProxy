@@ -37,11 +37,18 @@ func trackDevice(ip string, bytes int64) {
 }
 
 func resolveHostname(ip string) {
-	names, err := net.LookupAddr(ip)
-	if err != nil || len(names) == 0 {
+	name := ""
+	// DNS PTR (Windows cihazları, bazı Android)
+	if ns, err := net.LookupAddr(ip); err == nil && len(ns) > 0 {
+		name = strings.TrimSuffix(ns[0], ".")
+	}
+	// mDNS/Bonjour unicast (iPhone, macOS, modern Android)
+	if name == "" {
+		name = mdnsLookup(ip)
+	}
+	if name == "" {
 		return
 	}
-	name := strings.TrimSuffix(names[0], ".")
 	if v, ok := devices.Load(ip); ok {
 		v.(*deviceEntry).hostname.Store(name)
 	}

@@ -48,17 +48,31 @@ PATH=/opt/bin:/opt/sbin:/bin:/sbin:/usr/bin:/usr/sbin
 printf 'Content-Type: application/x-ns-proxy-autoconfig\r\nCache-Control: no-store,no-cache\r\n\r\n'
 NOW=$(date +%s)
 HB=/tmp/lunaproxy_hb
-PX=/tmp/lunaproxy_proxy
-if [ -f "$HB" ] && [ -f "$PX" ]; then
+PAC_JS=/tmp/lunaproxy_pac_js
+if [ -f "$HB" ]; then
   HB_T=$(cat "$HB" 2>/dev/null)
   DIFF=$((NOW - HB_T))
   if [ "$DIFF" -lt 30 ]; then
-    ADDR=$(cat "$PX" 2>/dev/null)
-    printf 'function FindProxyForURL(url,host){return "PROXY %s; DIRECT";}\n' "$ADDR"
-    exit 0
+    if [ -f "$PAC_JS" ]; then
+      cat "$PAC_JS"
+      exit 0
+    fi
+    PX=/tmp/lunaproxy_proxy
+    if [ -f "$PX" ]; then
+      ADDR=$(cat "$PX" 2>/dev/null)
+      printf 'function FindProxyForURL(url,host){return "PROXY %s; DIRECT";}\n' "$ADDR"
+      exit 0
+    fi
   fi
 fi
 printf 'function FindProxyForURL(url,host){return "DIRECT";}\n'
+`
+
+const routerUpdatePacSh = `#!/bin/sh
+PATH=/opt/bin:/opt/sbin:/bin:/sbin:/usr/bin:/usr/sbin
+printf 'Content-Type: text/plain\r\n\r\n'
+cat > /tmp/lunaproxy_pac_js
+printf 'ok\n'
 `
 
 const routerHbSh = `#!/bin/sh
@@ -290,9 +304,10 @@ func routerInstallKeenetic(client *ssh.Client, cfg RouterSetupCfg, progress func
 		path    string
 		content string
 	}{
-		{pacDir + "/pac", routerProxyPac},       // /pac URL için (uzantısız)
-		{pacDir + "/proxy.pac", routerProxyPac}, // /proxy.pac URL için (geriye dönük)
+		{pacDir + "/pac", routerProxyPac},
+		{pacDir + "/proxy.pac", routerProxyPac},
 		{pacDir + "/update.sh", routerUpdateSh},
+		{pacDir + "/update_pac.sh", routerUpdatePacSh},
 		{pacDir + "/hb.sh", routerHbSh},
 		{pacDir + "/lighttpd.conf", routerLighttpdConf},
 	}
@@ -426,9 +441,10 @@ func RouterInstall(cfg RouterSetupCfg, progress func(RouterStep)) error {
 		exec    bool
 	}{
 		{pacDir + "/pac", routerProxyPac, true},
-		{cgiDir + "/proxy.pac", routerProxyPac, true}, // eski kurulumlar için
+		{cgiDir + "/proxy.pac", routerProxyPac, true},
 		{cgiDir + "/hb.sh", routerHbSh, true},
 		{cgiDir + "/update.sh", routerUpdateSh, true},
+		{cgiDir + "/update_pac.sh", routerUpdatePacSh, true},
 	}
 	if useLighttpd {
 		files = append(files, struct {
