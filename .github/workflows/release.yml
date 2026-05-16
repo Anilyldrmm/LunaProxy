@@ -1,0 +1,56 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  build:
+    runs-on: windows-latest
+    permissions:
+      contents: write
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.22'
+
+      - name: Get version from tag
+        id: version
+        shell: pwsh
+        run: |
+          $tag = "${{ github.ref_name }}"
+          $ver = $tag.TrimStart('v')
+          echo "VERSION=$ver" >> $env:GITHUB_OUTPUT
+          echo "TAG=$tag" >> $env:GITHUB_OUTPUT
+
+      - name: Build exe
+        shell: pwsh
+        run: |
+          go build -tags withbundle -ldflags "-H windowsgui -X main.Version=${{ steps.version.outputs.VERSION }}" -o LunaProxy.exe .
+
+      - name: Install Inno Setup
+        shell: pwsh
+        run: |
+          $url = "https://jrsoftware.org/download.php/is.exe"
+          Invoke-WebRequest $url -OutFile is.exe
+          Start-Process -FilePath is.exe -ArgumentList "/VERYSILENT /NORESTART" -Wait
+
+      - name: Build installer
+        shell: pwsh
+        run: |
+          & "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" installer\LunaProxy.iss
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.version.outputs.TAG }}
+          name: LunaProxy ${{ steps.version.outputs.TAG }}
+          draft: false
+          prerelease: false
+          files: |
+            installer/Output/LunaProxy_Setup_v${{ steps.version.outputs.VERSION }}.exe
