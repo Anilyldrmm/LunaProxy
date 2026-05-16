@@ -64,20 +64,17 @@ LunaProxy, internet servis sağlayıcılarının (TTNet, Turkcell, Vodafone, Sup
 
 ## Nasıl Çalışır?
 
-```
-┌─────────────────────────────────────────────────────────┐
-│                        PC (LunaProxy)                    │
-│                                                         │
-│  GoodbyeDPI ──► HTTP Proxy :8888 ──► İnternet          │
-│                      ▲                                  │
-│                 PAC Sunucu :8080                        │
-│                 proxy.pac / wpad.dat                    │
-└──────────────────────┬──────────────────────────────────┘
-                       │ Wi-Fi
-         ┌─────────────┼─────────────┐
-         ▼             ▼             ▼
-      📱 Telefon    💻 Laptop    📺 Smart TV
-    (PAC URL ile)  (PAC URL ile) (PAC URL ile)
+```mermaid
+flowchart TD
+    subgraph PC["🖥️ PC — LunaProxy"]
+        GoodbyeDPI["GoodbyeDPI"] --> Proxy["HTTP Proxy :8888"]
+        Proxy --> Internet["🌐 İnternet"]
+        PAC["PAC Sunucu :8080\nproxy.pac / wpad.dat"] --> Proxy
+    end
+
+    PC -->|Wi-Fi| Telefon["📱 Telefon\nPAC URL ile"]
+    PC -->|Wi-Fi| Laptop["💻 Laptop\nPAC URL ile"]
+    PC -->|Wi-Fi| TV["📺 Smart TV\nPAC URL ile"]
 ```
 
 1. LunaProxy başlatıldığında GoodbyeDPI'yi arka planda çalıştırır
