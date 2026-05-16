@@ -639,7 +639,8 @@ window.addEventListener('DOMContentLoaded', function() {
 
         <div id="update-banner" style="display:none;background:var(--a-20);border:1px solid var(--a-40);border-radius:8px;padding:10px 14px;margin-bottom:12px;font-size:12px;color:var(--accent-bright);align-items:center;gap:8px">
           <span id="update-text"></span>
-          <button onclick="doUpdate()" style="margin-left:auto;padding:5px 12px;border-radius:6px;border:none;background:var(--accent);color:#fff;font-size:11px;font-weight:700;cursor:pointer">Güncelle</button>
+          <button id="update-btn" onclick="doUpdate()" style="margin-left:auto;padding:5px 12px;border-radius:6px;border:none;background:var(--accent);color:#fff;font-size:11px;font-weight:700;cursor:pointer">Güncelle</button>
+          <button onclick="dismissUpdate()" style="padding:5px 8px;border-radius:6px;border:1px solid var(--a-40);background:transparent;color:var(--sub);font-size:11px;cursor:pointer">✕</button>
         </div>
 
         <button class="toggle-btn" id="tbtn" onclick="toggle()">
@@ -1362,17 +1363,31 @@ function loadSettings(cfg) {
 }
 
 var _updateURL = '';
+var _updateDismissed = false;
 function showUpdateBanner(tag, url) {
+  if (_updateDismissed) return;
   _updateURL = url || '';
   var banner = document.getElementById('update-banner');
   var text = document.getElementById('update-text');
+  var btn = document.getElementById('update-btn');
   if (!banner || !text) return;
-  text.textContent = '🟣 Yeni sürüm: ' + tag;
+  text.textContent = 'Yeni sürüm: ' + tag;
+  if (_updateURL) {
+    if (btn) { btn.textContent = 'Güncelle'; btn.style.display = ''; btn.onclick = doUpdate; }
+  } else {
+    if (btn) { btn.textContent = 'İndir'; btn.style.display = ''; btn.onclick = function() { window.goMessage(JSON.stringify({type:'copyToClipboard',payload:{text:'https://github.com/Anilyldrmm/LunaProxy/releases/latest'}})); btn.textContent = '✔ Link kopyalandı'; setTimeout(function(){btn.textContent='İndir';},2000); }; }
+  }
   banner.style.display = 'flex';
 }
 
+function dismissUpdate() {
+  _updateDismissed = true;
+  var banner = document.getElementById('update-banner');
+  if (banner) banner.style.display = 'none';
+}
+
 function doUpdate() {
-  if (!_updateURL) { alert('İndirme URL bulunamadı'); return; }
+  if (!_updateURL) return;
   window.goMessage(JSON.stringify({type:'applyUpdate', payload:{url:_updateURL}}));
 }
 
