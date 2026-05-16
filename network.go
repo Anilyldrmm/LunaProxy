@@ -3,11 +3,29 @@
 import (
 	"fmt"
 	"net"
+	"net/http"
 	"os"
 	"os/exec"
 	"strings"
 	"syscall"
+	"time"
 )
+
+// probeRouterPACPath — router'da gerçekte çalışan PAC path'ini bulur.
+// /pac (yeni kurulum) veya /proxy.pac (eski/Keenetic kurulum) sırasıyla dener.
+func probeRouterPACPath(gateway string) string {
+	c := &http.Client{Timeout: 3 * time.Second}
+	for _, path := range []string{"/pac", "/proxy.pac"} {
+		resp, err := c.Get(fmt.Sprintf("http://%s:8090%s", gateway, path))
+		if err == nil {
+			resp.Body.Close()
+			if resp.StatusCode == 200 {
+				return path
+			}
+		}
+	}
+	return "/pac"
+}
 
 // guessGatewayIP — local IP'den varsayılan gateway'i tahmin eder.
 // 192.168.1.41 → 192.168.1.1

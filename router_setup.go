@@ -158,6 +158,33 @@ func sshWriteFile(client *ssh.Client, path, content, sudo string) error {
 	return session.Run("sudo sh -c " + shQuote(sshPath+"; tee "+shQuote(path)+" > /dev/null"))
 }
 
+// ── Keenetic NDM yardımcıları ────────────────────────────────────────────────
+
+// isKeenetic — SSH exec'te "show version" ile Keenetic firmware tespiti yapar.
+func isKeenetic(client *ssh.Client) bool {
+	out, _ := sshRun(client, "show version")
+	clean := strings.ReplaceAll(out, "\x1b[K", "")
+	return strings.Contains(clean, "Keenetic")
+}
+
+// sshExecNDM — Keenetic NDM CLI için 'exec <cmd>' wrapper.
+// Keenetic SSH exec'inde sh -c çalışmaz; NDM'nin kendi exec komutu kullanılır.
+func sshExecNDM(client *ssh.Client, cmd string) (string, error) {
+	return sshRun(client, "exec "+cmd)
+}
+
+// sshWriteNDM — Keenetic'te dosya yazmak için 'exec tee <path>' + stdin kullanır.
+// Shell redirection yok; NDM exec tee komutunu destekler.
+func sshWriteNDM(client *ssh.Client, path, content string) error {
+	session, err := client.NewSession()
+	if err != nil {
+		return err
+	}
+	defer session.Close()
+	session.Stdin = strings.NewReader(content)
+	return session.Run("exec tee " + path)
+}
+
 // ── Tespit fonksiyonları ─────────────────────────────────────────────────────
 
 func isOpenWrt(client *ssh.Client) bool {
@@ -235,6 +262,77 @@ func getSudoPrefix(client *ssh.Client) string {
 	return "sudo "
 }
 
+// ── Keenetic kurulum fonksiyonu ─────────────────────────────────────────────
+
+// routerInstallKeenetic — Keenetic NDM CLI üzerinden kurulum yapar.
+// 'exec <cmd>' ve 'exec tee <path>' ile shell syntax kullanmadan dosya yazar.
+// Entware + lighttpd zaten kurulu varsayılır; scriptleri günceller ve lighttpd başlatır.
+func routerInstallKeenetic(client *ssh.Client, cfg RouterSetupCfg, progress func(RouterStep)) error {
+	progress(RouterStep{"Keenetic firmware tespit edildi", "ok"})
+
+	pacDir := "/opt/share/pac"
+
+	// Entware kurulu mu?
+	out, _ := sshExecNDM(client, "ls /opt/bin/sh 2>/dev/null")
+	if !strings.Contains(out, "sh") {
+		return fmt.Errorf("Entware kurulu değil — /opt/bin/sh bulunamadı")
+	}
+	progress(RouterStep{"Entware mevcut", "ok"})
+
+	// Dizin oluştur
+	if _, err := sshExecNDM(client, "mkdir -p "+pacDir); err != nil {
+		return fmt.Errorf("dizin oluşturulamadı: %w", err)
+	}
+
+	// Scriptleri yaz
+	progress(RouterStep{"Scriptler yazılıyor...", "info"})
+	scripts := []struct {
+		path    string
+		content string
+	}{
+		{pacDir + "/proxy.pac", routerProxyPac},
+		{pacDir + "/update.sh", routerUpdateSh},
+		{pacDir + "/hb.sh", routerHbSh},
+		{pacDir + "/lighttpd.conf", routerLighttpdConf},
+	}
+	for _, s := range scripts {
+		if err := sshWriteNDM(client, s.path, s.content); err != nil {
+			return fmt.Errorf("%s yazılamadı: %w", s.path, err)
+		}
+		sshExecNDM(client, "chmod +x "+s.path) //nolint:errcheck
+	}
+	progress(RouterStep{"Scriptler yazıldı", "ok"})
+
+	// lighttpd'yi başlat ya da yeniden başlat
+	sshExecNDM(client, "kill $(cat /tmp/lunaproxy_lighttpd.pid 2>/dev/null) 2>/dev/null") //nolint:errcheck
+	time.Sleep(300 * time.Millisecond)
+
+	lighttpdBin := "/opt/bin/lighttpd"
+	if _, err := sshExecNDM(client, lighttpdBin+" -f "+pacDir+"/lighttpd.conf"); err != nil {
+		// init.d üzerinden dene
+		sshExecNDM(client, "/opt/etc/init.d/S80lighttpd start") //nolint:errcheck
+	}
+	progress(RouterStep{"lighttpd başlatıldı (port 8090)", "ok"})
+
+	time.Sleep(800 * time.Millisecond)
+	testURL := fmt.Sprintf("http://%s:8090/pac", cfg.Host)
+	resp, err := (&http.Client{Timeout: 5 * time.Second}).Get(testURL)
+	if err != nil {
+		// /proxy.pac'ı da dene
+		testURL = fmt.Sprintf("http://%s:8090/proxy.pac", cfg.Host)
+		resp, err = (&http.Client{Timeout: 5 * time.Second}).Get(testURL)
+	}
+	if err != nil {
+		return fmt.Errorf("kurulum doğrulanamadı: %s erişilemiyor", testURL)
+	}
+	resp.Body.Close()
+	if resp.StatusCode != 200 {
+		return fmt.Errorf("PAC HTTP %d döndü", resp.StatusCode)
+	}
+	progress(RouterStep{fmt.Sprintf("Doğrulandı — %s erişilebilir", testURL), "ok"})
+	return nil
+}
+
 // ── Ana kurulum fonksiyonu ───────────────────────────────────────────────────
 
 // RouterInstall — SSH üzerinden router'a PAC+heartbeat scriptlerini kurar.
@@ -248,6 +346,11 @@ func RouterInstall(cfg RouterSetupCfg, progress func(RouterStep)) error {
 	}
 	defer client.Close()
 	progress(RouterStep{"SSH bağlantısı kuruldu", "ok"})
+
+	// Keenetic firmware tespiti — NDM CLI farklı kurulum yolu gerektirir
+	if isKeenetic(client) {
+		return routerInstallKeenetic(client, cfg, progress)
+	}
 
 	// Yetki kontrolü — root değilse sudo prefix kullan
 	sudo := getSudoPrefix(client)
@@ -399,15 +502,17 @@ func RouterInstall(cfg RouterSetupCfg, progress func(RouterStep)) error {
 }
 
 // RouterTest — önceden kurulu bir router'ın PAC endpoint'ini test eder.
+// /pac ve /proxy.pac sırasıyla denenir (Keenetic uyumluluğu için).
 func RouterTest(host string) error {
-	url := fmt.Sprintf("http://%s:8090/pac", host)
-	resp, err := (&http.Client{Timeout: 5 * time.Second}).Get(url)
-	if err != nil {
-		return fmt.Errorf("%s erişilemiyor", url)
+	c := &http.Client{Timeout: 5 * time.Second}
+	for _, path := range []string{"/pac", "/proxy.pac"} {
+		resp, err := c.Get(fmt.Sprintf("http://%s:8090%s", host, path))
+		if err == nil {
+			resp.Body.Close()
+			if resp.StatusCode == 200 {
+				return nil
+			}
+		}
 	}
-	defer resp.Body.Close()
-	if resp.StatusCode != 200 {
-		return fmt.Errorf("HTTP %d", resp.StatusCode)
-	}
-	return nil
+	return fmt.Errorf("http://%s:8090 PAC endpoint erişilemiyor", host)
 }

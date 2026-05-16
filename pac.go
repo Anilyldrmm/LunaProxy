@@ -132,7 +132,8 @@ func buildPACMux(localIP string, port int) *http.ServeMux {
 	setupURL := fmt.Sprintf("http://%s:%d/setup", localIP, port)
 	_ = setupURL
 
-	routerPACURL := fmt.Sprintf("http://%s:8090/pac", guessGatewayIP(localIP))
+	gw := guessGatewayIP(localIP)
+	routerPACURL := fmt.Sprintf("http://%s:8090%s", gw, probeRouterPACPath(gw))
 
 	mux.HandleFunc("/setup", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
