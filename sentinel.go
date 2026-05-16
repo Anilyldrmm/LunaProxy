@@ -1,4 +1,4 @@
-package main
+﻿package main
 
 import (
 	"fmt"
@@ -35,7 +35,7 @@ var (
 // ensureSingleInstance — Windows Named Mutex ile tek-örnek koruması.
 // TCP port kilidinden çok daha güvenilir; process crash'te OS otomatik serbest bırakır.
 func ensureSingleInstance() bool {
-	name, _ := windows.UTF16PtrFromString("Local\\SpAC3DPI_v3_SingleInstance")
+	name, _ := windows.UTF16PtrFromString("Local\\LunaProxy_v3_SingleInstance")
 	r, _, lastErr := procCreateMutexW.Call(
 		0,                             // lpMutexAttributes (nil → inherit default)
 		0,                             // bInitialOwner (false)
@@ -77,7 +77,7 @@ func BackupSystemProxy() {
 	logInfo(fmt.Sprintf("Sistem proxy yedeği alındı (enable=%d server=%q)", en, srv))
 }
 
-// SetSystemProxy — Windows sistem proxy'sini SpAC3DPI'a yönlendirir.
+// SetSystemProxy — Windows sistem proxy'sini LunaProxy'a yönlendirir.
 func SetSystemProxy(addr string) error {
 	k, err := registry.OpenKey(registry.CURRENT_USER, inetRegPath, registry.SET_VALUE)
 	if err != nil {

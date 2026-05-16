@@ -1,4 +1,4 @@
-module spac3dpi
+module lunaproxy
 
 go 1.25.0
 

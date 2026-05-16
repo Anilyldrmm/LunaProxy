@@ -23,8 +23,10 @@ var (
 	wvProcShowWindow       = wvModUser32.NewProc("ShowWindow")
 	wvProcLoadImage        = wvModUser32.NewProc("LoadImageW")
 
-	wvProcReleaseCapture = wvModUser32.NewProc("ReleaseCapture")
-	wvProcSendMessage    = wvModUser32.NewProc("SendMessageW")
+	wvProcReleaseCapture      = wvModUser32.NewProc("ReleaseCapture")
+	wvProcSendMessage         = wvModUser32.NewProc("SendMessageW")
+	wvProcSetForegroundWindow = wvModUser32.NewProc("SetForegroundWindow")
+	wvProcFindWindowW         = wvModUser32.NewProc("FindWindowW")
 
 	wvModDwmapi            = windows.NewLazySystemDLL("dwmapi.dll")
 	wvProcDwmSetWindowAttr = wvModDwmapi.NewProc("DwmSetWindowAttribute")
@@ -169,13 +171,29 @@ func wvSetTaskbarIcon(hwnd uintptr) {
 	wvProcSendMessage.Call(hwnd, wmSetIcon, 1, hBig)   // ICON_BIG (alt-tab)
 }
 
-// showWindow — pencereyi göster (tray'den çağrılır).
+// showWindow — pencereyi göster ve öne getir (tray'den çağrılır).
 func showWindow() {
 	if wv == nil {
 		return
 	}
 	hwnd := uintptr(wv.Window())
 	wvProcShowWindow.Call(hwnd, wvSwShow)
+	wvProcSetForegroundWindow.Call(hwnd)
+}
+
+// bringExistingToFront — başka bir process'ten çalışan örneği öne getirir.
+// İkinci instance açılmaya çalışıldığında pencereyi göster.
+func bringExistingToFront() {
+	title, err := windows.UTF16PtrFromString("LunaProxy")
+	if err != nil {
+		return
+	}
+	hwnd, _, _ := wvProcFindWindowW.Call(0, uintptr(unsafe.Pointer(title)))
+	if hwnd == 0 {
+		return
+	}
+	wvProcShowWindow.Call(hwnd, wvSwShow)
+	wvProcSetForegroundWindow.Call(hwnd)
 }
 
 // hideWindow — pencereyi gizle (tray'e minimize).

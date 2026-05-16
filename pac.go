@@ -1,4 +1,4 @@
-package main
+﻿package main
 
 import (
 	"fmt"
@@ -53,24 +53,31 @@ func startPAC(localIP string, port int) (*http.Server, error) {
 
 // pushRouterPAC — PC→Router HTTP CGI ile PAC durumunu günceller.
 // Proxy modunda IP ve port da gönderilir; router PAC'ı dinamik yazar.
-// Router erişilemezse sessizce geçer.
+// Yeni kurulum /cgi-bin/update.sh, eski kurulum /update.sh — her ikisini dener.
 func pushRouterPAC(localIP, mode string, proxyPort int) {
 	gateway := guessGatewayIP(localIP)
-	var url string
+	var query string
 	if mode == "proxy" {
-		url = fmt.Sprintf("http://%s:8090/cgi-bin/update.sh?mode=proxy&ip=%s&port=%d", gateway, localIP, proxyPort)
+		query = fmt.Sprintf("mode=proxy&ip=%s&port=%d", localIP, proxyPort)
 	} else {
-		url = fmt.Sprintf("http://%s:8090/cgi-bin/update.sh?mode=direct", gateway)
+		query = "mode=direct"
 	}
 	client := &http.Client{Timeout: 5 * time.Second}
-	for i := 0; i < 3; i++ {
-		resp, err := client.Get(url)
-		if err == nil {
-			resp.Body.Close()
-			return
-		}
-		if i < 2 {
-			time.Sleep(2 * time.Second)
+	for _, path := range []string{"/cgi-bin/update.sh", "/update.sh"} {
+		url := fmt.Sprintf("http://%s:8090%s?%s", gateway, path, query)
+		for i := 0; i < 3; i++ {
+			resp, err := client.Get(url)
+			if err == nil {
+				ok := resp.StatusCode == 200
+				resp.Body.Close()
+				if ok {
+					return
+				}
+				break // 404 gibi hata — bu path'ı deneme, sonrakine geç
+			}
+			if i < 2 {
+				time.Sleep(2 * time.Second)
+			}
 		}
 	}
 }
@@ -125,7 +132,7 @@ func buildPACMux(localIP string, port int) *http.ServeMux {
 const setupPageHTML = `<!DOCTYPE html>
 <html lang="tr"><head><meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>SpAC3DPI Kurulum</title>
+<title>LunaProxy Kurulum</title>
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
 body{font-family:system-ui,sans-serif;background:#0D0B14;color:#F1F0F5;min-height:100vh;
@@ -151,7 +158,7 @@ h1{font-size:20px;font-weight:700;margin-bottom:4px}
 hr{border:none;border-top:1px solid #2A2240;margin:16px 0}
 </style></head>
 <body><div class="card">
-<h1>SpAC3DPI Kurulum</h1>
+<h1>LunaProxy Kurulum</h1>
 <p class="sub">Proxy ayari icin asagidaki URL'yi kopyalayin.</p>
 <div class="badge">ONERILEN — Router (her zaman erisebilir)</div>
 <div class="url-box" id="rurl">%s</div>

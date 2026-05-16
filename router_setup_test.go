@@ -1,4 +1,4 @@
-//go:build windows
+﻿//go:build windows
 
 package main
 
@@ -17,10 +17,10 @@ func TestRouterScriptContents(t *testing.T) {
 	if !strings.Contains(routerProxyPac, "DIRECT") {
 		t.Error("proxy.pac: DIRECT fallback eksik")
 	}
-	if !strings.Contains(routerHbSh, "date +%s > /tmp/spac3dpi_hb") {
+	if !strings.Contains(routerHbSh, "date +%s > /tmp/lunaproxy_hb") {
 		t.Error("hb.sh: heartbeat yazma komutu eksik")
 	}
-	if !strings.Contains(routerUpdateSh, "spac3dpi_proxy") {
+	if !strings.Contains(routerUpdateSh, "lunaproxy_proxy") {
 		t.Error("update.sh: proxy dosyası yazma eksik")
 	}
 	if !strings.Contains(routerLighttpdConf, "8090") {

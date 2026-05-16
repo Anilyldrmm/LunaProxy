@@ -1,15 +1,15 @@
-<div align="center">
+﻿<div align="center">
 
-<img src="icon.png" width="120" alt="SpAC3DPI Logo">
+<img src="icon.png" width="120" alt="LunaProxy Logo">
 
-# SpAC3DPI
+# LunaProxy
 
 **Windows için GoodbyeDPI tabanlı DPI Bypass Proxy**
 
 Engellenen sitelere PC'den ve aynı Wi-Fi ağındaki tüm cihazlardan (telefon, tablet, TV) ek uygulama kurmadan erişin.
 
-[![Release](https://img.shields.io/github/v/release/Anilyldrmm/SpAC3DPI?style=flat-square&color=7c3aed)](https://github.com/Anilyldrmm/SpAC3DPI/releases/latest)
-[![Platform](https://img.shields.io/badge/platform-Windows%2010%2F11-0078D4?style=flat-square&logo=windows)](https://github.com/Anilyldrmm/SpAC3DPI/releases/latest)
+[![Release](https://img.shields.io/github/v/release/Anilyldrmm/LunaProxy?style=flat-square&color=7c3aed)](https://github.com/Anilyldrmm/LunaProxy/releases/latest)
+[![Platform](https://img.shields.io/badge/platform-Windows%2010%2F11-0078D4?style=flat-square&logo=windows)](https://github.com/Anilyldrmm/LunaProxy/releases/latest)
 [![License](https://img.shields.io/badge/license-MIT-green?style=flat-square)](LICENSE)
 
 [⬇️ İndir](#kurulum) · [Nasıl Çalışır?](#nasıl-çalışır) · [Router Kurulumu](#router-kurulumu) · [Kaynak Koddan Derleme](#kaynak-koddan-derleme)
@@ -20,7 +20,7 @@ Engellenen sitelere PC'den ve aynı Wi-Fi ağındaki tüm cihazlardan (telefon, 
 
 ## Ne İşe Yarar?
 
-SpAC3DPI, internet servis sağlayıcılarının (TTNet, Turkcell, Vodafone, Superonline vb.) DPI (Deep Packet Inspection) yöntemiyle uyguladığı bant genişliği kısıtlamalarını ve site engellerini **tek tıkla** aşmanızı sağlar.
+LunaProxy, internet servis sağlayıcılarının (TTNet, Turkcell, Vodafone, Superonline vb.) DPI (Deep Packet Inspection) yöntemiyle uyguladığı bant genişliği kısıtlamalarını ve site engellerini **tek tıkla** aşmanızı sağlar.
 
 - **PC'de çalışır, ağdaki her cihazı korur.** Telefon, tablet veya Smart TV'nize hiçbir şey kurmanız gerekmez — sadece Wi-Fi ayarlarından PAC URL'ini girin.
 - **GoodbyeDPI entegrasyonu.** Dünya genelinde milyonlarca kullanıcının güvendiği açık kaynak motoru kullanır.
@@ -54,9 +54,9 @@ SpAC3DPI, internet servis sağlayıcılarının (TTNet, Turkcell, Vodafone, Supe
 
 ### İndirme ve Kurulum
 
-1. **[Releases](https://github.com/Anilyldrmm/SpAC3DPI/releases/latest)** sayfasından `SpAC3DPI_Setup_vX.X.X.exe` dosyasını indirin
+1. **[Releases](https://github.com/Anilyldrmm/LunaProxy/releases/latest)** sayfasından `LunaProxy_Setup_vX.X.X.exe` dosyasını indirin
 2. Kurulum sihirbazını çalıştırın (yönetici yetkisi isteyecektir)
-3. Kurulum tamamlandıktan sonra SpAC3DPI otomatik başlar
+3. Kurulum tamamlandıktan sonra LunaProxy otomatik başlar
 
 > **Windows Defender uyarısı:** GoodbyeDPI içerdiği için bazı antivirüs yazılımları yanlış pozitif verebilir. Bu normaldir. Güvende olmak istiyorsanız [kaynak kodunu](#kaynak-koddan-derleme) kendiniz derleyebilirsiniz.
 
@@ -66,7 +66,7 @@ SpAC3DPI, internet servis sağlayıcılarının (TTNet, Turkcell, Vodafone, Supe
 
 ```
 ┌─────────────────────────────────────────────────────────┐
-│                        PC (SpAC3DPI)                    │
+│                        PC (LunaProxy)                    │
 │                                                         │
 │  GoodbyeDPI ──► HTTP Proxy :8888 ──► İnternet          │
 │                      ▲                                  │
@@ -80,14 +80,14 @@ SpAC3DPI, internet servis sağlayıcılarının (TTNet, Turkcell, Vodafone, Supe
     (PAC URL ile)  (PAC URL ile) (PAC URL ile)
 ```
 
-1. SpAC3DPI başlatıldığında GoodbyeDPI'yi arka planda çalıştırır
+1. LunaProxy başlatıldığında GoodbyeDPI'yi arka planda çalıştırır
 2. Yerel bir HTTP proxy sunucusu (port 8888) ve PAC sunucusu (port 8080) açar
 3. Diğer cihazlar PAC URL'ini kullanarak bu proxy üzerinden internete bağlanır
 4. PAC sunucusu hangi sitelerin proxy üzerinden geçeceğini otomatik belirler
 
 ### Mobil Cihazlarda Kullanım
 
-1. SpAC3DPI'de **QR** sekmesine geçin
+1. LunaProxy'de **QR** sekmesine geçin
 2. QR kodu telefon kamerasıyla okutun
 3. Açılan sayfadaki talimatları izleyin
 
@@ -103,7 +103,7 @@ Tüm ağı (modem üzerinden bağlanan her cihazı) otomatik olarak proxy'ye yö
 2. Router IP adresinizi (genellikle `192.168.1.1`), SSH kullanıcı adı ve şifrenizi girin
 3. **Kur** butonuna tıklayın
 
-SpAC3DPI SSH üzerinden router'ınıza bağlanır ve gerekli scriptleri otomatik kurar.
+LunaProxy SSH üzerinden router'ınıza bağlanır ve gerekli scriptleri otomatik kurar.
 
 **Desteklenen router'lar:**
 - OpenWrt (Entware ile lighttpd)
@@ -132,17 +132,17 @@ SpAC3DPI SSH üzerinden router'ınıza bağlanır ve gerekli scriptleri otomatik
 
 ```powershell
 # Repoyu klonla
-git clone https://github.com/Anilyldrmm/SpAC3DPI.git
-cd SpAC3DPI
+git clone https://github.com/Anilyldrmm/LunaProxy.git
+cd LunaProxy
 
 # Bağımlılıkları indir
 go mod download
 
 # Derleme (GoodbyeDPI gömülü)
-go build -tags withbundle -ldflags "-H windowsgui -s -w" -o SpAC3DPI.exe .
+go build -tags withbundle -ldflags "-H windowsgui -s -w" -o LunaProxy.exe .
 
 # Derleme (GoodbyeDPI gömülü değil — test için)
-go build -ldflags "-H windowsgui" -o SpAC3DPI.exe .
+go build -ldflags "-H windowsgui" -o LunaProxy.exe .
 ```
 
 ### Installer Oluşturma
@@ -150,10 +150,10 @@ go build -ldflags "-H windowsgui" -o SpAC3DPI.exe .
 [Inno Setup 6](https://jrsoftware.org/isdl.php) kurulduktan sonra:
 
 ```powershell
-& "C:\Users\$env:USERNAME\AppData\Local\Programs\Inno Setup 6\ISCC.exe" installer\SpAC3DPI.iss
+& "C:\Users\$env:USERNAME\AppData\Local\Programs\Inno Setup 6\ISCC.exe" installer\LunaProxy.iss
 ```
 
-Installer `installer\Output\SpAC3DPI_Setup_vX.X.X.exe` olarak oluşturulur.
+Installer `installer\Output\LunaProxy_Setup_vX.X.X.exe` olarak oluşturulur.
 
 ---
 
@@ -172,7 +172,7 @@ Installer `installer\Output\SpAC3DPI_Setup_vX.X.X.exe` olarak oluşturulur.
 
 ## Gizlilik
 
-SpAC3DPI **hiçbir veriyi dışarıya göndermez.** Tüm trafik yerel ağınızda kalır. Güncellemeler için yalnızca GitHub Releases API'si sorgulanır.
+LunaProxy **hiçbir veriyi dışarıya göndermez.** Tüm trafik yerel ağınızda kalır. Güncellemeler için yalnızca GitHub Releases API'si sorgulanır.
 
 ---
 

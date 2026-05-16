@@ -1,10 +1,10 @@
-@echo off
+﻿@echo off
 chcp 65001 >nul
-title SpAC3DPI — Build
+title LunaProxy — Build
 
 echo.
 echo  ╔════════════════════════════════════════════════╗
-echo  ║         SpAC3DPI  —  Build Script              ║
+echo  ║         LunaProxy  —  Build Script              ║
 echo  ╚════════════════════════════════════════════════╝
 echo.
 
@@ -63,7 +63,7 @@ if %ERRORLEVEL% NEQ 0 (
 
 :: ── Derleme ───────────────────────────────────────────────────────────────────
 echo  Derleniyor...
-go build -ldflags "-H windowsgui -s -w" -o SpAC3DPI.exe .
+go build -ldflags "-H windowsgui -s -w" -o LunaProxy.exe .
 
 if %ERRORLEVEL% NEQ 0 (
     echo.
@@ -72,6 +72,6 @@ if %ERRORLEVEL% NEQ 0 (
 )
 
 echo.
-for %%F in (SpAC3DPI.exe) do echo  [OK]  SpAC3DPI.exe  —  %%~zF bytes
+for %%F in (LunaProxy.exe) do echo  [OK]  LunaProxy.exe  —  %%~zF bytes
 echo.
 pause

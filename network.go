@@ -1,4 +1,4 @@
-package main
+﻿package main
 
 import (
 	"fmt"
@@ -32,8 +32,8 @@ func getLocalIP() string {
 
 func addFirewallRules(proxyPort, pacPort int) {
 	for _, r := range []struct{ name, port string }{
-		{"SpAC3DPI_Proxy", fmt.Sprintf("%d", proxyPort)},
-		{"SpAC3DPI_PAC", fmt.Sprintf("%d", pacPort)},
+		{"LunaProxy_Proxy", fmt.Sprintf("%d", proxyPort)},
+		{"LunaProxy_PAC", fmt.Sprintf("%d", pacPort)},
 	} {
 		hiddenRun("netsh", "advfirewall", "firewall", "delete", "rule",
 			"name="+r.name)
@@ -64,7 +64,7 @@ func openBrowser(url string) {
 
 // writeTempPNG — QR PNG için yardımcı
 func writeTempPNG(data []byte) (path string, cleanup func()) {
-	f, err := os.CreateTemp("", "spac3dpi_*.png")
+	f, err := os.CreateTemp("", "lunaproxy_*.png")
 	if err != nil {
 		return "", func() {}
 	}

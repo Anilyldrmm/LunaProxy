@@ -39,7 +39,8 @@ var appExiting bool
 
 func main() {
 	if !ensureSingleInstance() {
-		return // başka örnek zaten çalışıyor — sessizce çık
+		bringExistingToFront()
+		return
 	}
 
 	SentinelCheck()

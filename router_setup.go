@@ -1,4 +1,4 @@
-//go:build windows
+﻿//go:build windows
 
 package main
 
@@ -29,8 +29,8 @@ type RouterStep struct {
 
 const routerLighttpdConf = `server.document-root = "/opt/share/pac"
 server.port = 8090
-server.pid-file = "/tmp/spac3dpi_lighttpd.pid"
-server.errorlog = "/tmp/spac3dpi_lighttpd.log"
+server.pid-file = "/tmp/lunaproxy_lighttpd.pid"
+server.errorlog = "/tmp/lunaproxy_lighttpd.log"
 server.modules = ("mod_cgi", "mod_accesslog")
 accesslog.filename = "/dev/null"
 cgi.assign = (".sh" => "/opt/bin/sh", ".pac" => "/opt/bin/sh")
@@ -44,8 +44,8 @@ const routerProxyPac = `#!/bin/sh
 PATH=/opt/bin:/opt/sbin:/bin:/sbin:/usr/bin:/usr/sbin
 printf 'Content-Type: application/x-ns-proxy-autoconfig\r\nCache-Control: no-store,no-cache\r\n\r\n'
 NOW=$(date +%s)
-HB=/tmp/spac3dpi_hb
-PX=/tmp/spac3dpi_proxy
+HB=/tmp/lunaproxy_hb
+PX=/tmp/lunaproxy_proxy
 if [ -f "$HB" ] && [ -f "$PX" ]; then
   HB_T=$(cat "$HB" 2>/dev/null)
   DIFF=$((NOW - HB_T))
@@ -61,7 +61,7 @@ printf 'function FindProxyForURL(url,host){return "DIRECT";}\n'
 const routerHbSh = `#!/bin/sh
 PATH=/opt/bin:/opt/sbin:/bin:/sbin:/usr/bin:/usr/sbin
 printf 'Content-Type: text/plain\r\n\r\n'
-date +%s > /tmp/spac3dpi_hb
+date +%s > /tmp/lunaproxy_hb
 printf 'ok\n'
 `
 
@@ -72,10 +72,10 @@ MODE=$(echo "$QUERY_STRING" | sed 's/.*mode=//;s/&.*//')
 IP=$(echo "$QUERY_STRING" | sed 's/.*ip=//;s/&.*//')
 PORT=$(echo "$QUERY_STRING" | sed 's/.*port=//;s/&.*//')
 if [ "$MODE" = "proxy" ] && [ -n "$IP" ] && [ -n "$PORT" ]; then
-  printf '%s:%s' "$IP" "$PORT" > /tmp/spac3dpi_proxy
-  date +%s > /tmp/spac3dpi_hb
+  printf '%s:%s' "$IP" "$PORT" > /tmp/lunaproxy_proxy
+  date +%s > /tmp/lunaproxy_hb
 else
-  rm -f /tmp/spac3dpi_proxy
+  rm -f /tmp/lunaproxy_proxy
 fi
 printf 'ok\n'
 `
@@ -85,16 +85,16 @@ START=80
 STOP=20
 USE_PROCD=0
 start() {
-  if [ -f /tmp/spac3dpi_lighttpd.pid ]; then
-    kill "$(cat /tmp/spac3dpi_lighttpd.pid)" 2>/dev/null
-    rm -f /tmp/spac3dpi_lighttpd.pid
+  if [ -f /tmp/lunaproxy_lighttpd.pid ]; then
+    kill "$(cat /tmp/lunaproxy_lighttpd.pid)" 2>/dev/null
+    rm -f /tmp/lunaproxy_lighttpd.pid
   fi
   /opt/bin/lighttpd -f /opt/share/pac/lighttpd.conf
 }
 stop() {
-  if [ -f /tmp/spac3dpi_lighttpd.pid ]; then
-    kill "$(cat /tmp/spac3dpi_lighttpd.pid)" 2>/dev/null
-    rm -f /tmp/spac3dpi_lighttpd.pid
+  if [ -f /tmp/lunaproxy_lighttpd.pid ]; then
+    kill "$(cat /tmp/lunaproxy_lighttpd.pid)" 2>/dev/null
+    rm -f /tmp/lunaproxy_lighttpd.pid
   fi
 }
 `
@@ -255,38 +255,46 @@ func RouterInstall(cfg RouterSetupCfg, progress func(RouterStep)) error {
 	}
 
 	// HTTP sunucu seçimi — öncelik: lighttpd > httpd > busybox httpd > python
+	entware := hasEntware(client)
 	useLighttpd := false
-	httpdBin := ""    // system httpd veya "busybox httpd"
-	pythonBin := ""   // "python3" veya "python"
-	pythonMod := ""   // "http.server --cgi" veya "CGIHTTPServer"
+	httpdBin := ""  // system httpd veya "busybox httpd"
+	pythonBin := "" // "python3" veya "python"
+	pythonMod := "" // "http.server --cgi" veya "CGIHTTPServer"
 
 	if hasLighttpd(client) {
 		useLighttpd = true
 		progress(RouterStep{"lighttpd mevcut", "ok"})
-	} else if hasEntware(client) {
+	} else if entware {
 		progress(RouterStep{"lighttpd kuruluyor (opkg)...", "info"})
 		if out, err := sshRun(client, "opkg update && opkg install lighttpd"); err != nil {
-			return fmt.Errorf("lighttpd kurulamadı: %s", out)
+			// ISP opkg repolarını engelliyor olabilir — alternatif HTTP sunucu ara
+			progress(RouterStep{"opkg erişilemiyor, alternatif HTTP sunucu aranıyor...", "info"})
+			logWarn("opkg hata: " + strings.TrimSpace(out))
+		} else {
+			useLighttpd = true
+			progress(RouterStep{"lighttpd kuruldu", "ok"})
 		}
-		useLighttpd = true
-		progress(RouterStep{"lighttpd kuruldu", "ok"})
-	} else if bin, ok := findHTTPD(client); ok {
-		httpdBin = bin
-		progress(RouterStep{"httpd tespit edildi: " + bin, "info"})
-	} else if hasBusyboxHTTPD(client) {
-		httpdBin = "busybox httpd"
-		progress(RouterStep{"BusyBox httpd kullanılacak", "info"})
-	} else if pb, pm, ok := findPython(client); ok {
-		pythonBin = pb
-		pythonMod = pm
-		progress(RouterStep{"Python CGI sunucu kullanılacak (" + pb + ")", "info"})
-	} else {
-		return fmt.Errorf("HTTP sunucu bulunamadı — lighttpd, httpd, BusyBox veya Python gerekli")
+	}
+
+	if !useLighttpd {
+		if bin, ok := findHTTPD(client); ok {
+			httpdBin = bin
+			progress(RouterStep{"httpd tespit edildi: " + bin, "info"})
+		} else if hasBusyboxHTTPD(client) {
+			httpdBin = "busybox httpd"
+			progress(RouterStep{"BusyBox httpd kullanılacak", "info"})
+		} else if pb, pm, ok := findPython(client); ok {
+			pythonBin = pb
+			pythonMod = pm
+			progress(RouterStep{"Python CGI sunucu kullanılacak (" + pb + ")", "info"})
+		} else {
+			return fmt.Errorf("HTTP sunucu bulunamadı — lighttpd, httpd, BusyBox veya Python gerekli")
+		}
 	}
 
 	// Dizin yapısı: lighttpd→/opt/share/pac, diğerleri→/tmp/pac
 	pacDir := "/opt/share/pac"
-	if !hasEntware(client) {
+	if !entware {
 		pacDir = "/tmp/pac"
 	}
 	cgiDir := pacDir + "/cgi-bin"
@@ -318,7 +326,7 @@ func RouterInstall(cfg RouterSetupCfg, progress func(RouterStep)) error {
 			path    string
 			content string
 			exec    bool
-		}{"/opt/etc/init.d/S80spac3dpi", routerInitScript, true})
+		}{"/opt/etc/init.d/S80lunaproxy", routerInitScript, true})
 	}
 	for _, f := range files {
 		if err := sshWriteFile(client, f.path, f.content, sudo); err != nil {
@@ -341,7 +349,7 @@ func RouterInstall(cfg RouterSetupCfg, progress func(RouterStep)) error {
 		if out, _ := sshRun(client, "which lighttpd 2>/dev/null"); out != "" {
 			lighttpdBin = out
 		}
-		sshExec(client, `if [ -f /tmp/spac3dpi_lighttpd.pid ]; then kill $(cat /tmp/spac3dpi_lighttpd.pid) 2>/dev/null; sleep 1; fi`, sudo) //nolint:errcheck
+		sshExec(client, `if [ -f /tmp/lunaproxy_lighttpd.pid ]; then kill $(cat /tmp/lunaproxy_lighttpd.pid) 2>/dev/null; sleep 1; fi`, sudo) //nolint:errcheck
 		if out, err := sshExec(client, lighttpdBin+" -f "+shQuote(pacDir+"/lighttpd.conf"), sudo); err != nil {
 			return fmt.Errorf("lighttpd başlatılamadı: %s", out)
 		}
