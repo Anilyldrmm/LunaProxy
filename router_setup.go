@@ -290,7 +290,8 @@ func routerInstallKeenetic(client *ssh.Client, cfg RouterSetupCfg, progress func
 		path    string
 		content string
 	}{
-		{pacDir + "/proxy.pac", routerProxyPac},
+		{pacDir + "/pac", routerProxyPac},       // /pac URL için (uzantısız)
+		{pacDir + "/proxy.pac", routerProxyPac}, // /proxy.pac URL için (geriye dönük)
 		{pacDir + "/update.sh", routerUpdateSh},
 		{pacDir + "/hb.sh", routerHbSh},
 		{pacDir + "/lighttpd.conf", routerLighttpdConf},
@@ -317,7 +318,10 @@ func routerInstallKeenetic(client *ssh.Client, cfg RouterSetupCfg, progress func
 	time.Sleep(800 * time.Millisecond)
 	testURL := fmt.Sprintf("http://%s:8090/pac", cfg.Host)
 	resp, err := (&http.Client{Timeout: 5 * time.Second}).Get(testURL)
-	if err != nil {
+	if err != nil || resp.StatusCode != 200 {
+		if resp != nil {
+			resp.Body.Close()
+		}
 		// /proxy.pac'ı da dene
 		testURL = fmt.Sprintf("http://%s:8090/proxy.pac", cfg.Host)
 		resp, err = (&http.Client{Timeout: 5 * time.Second}).Get(testURL)
