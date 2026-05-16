@@ -1,8 +1,8 @@
-#define AppName      "SpAC3DPI"
-#define AppVersion   "1.0.0"
+﻿#define AppName      "LunaProxy"
+#define AppVersion   "1.0.19"
 #define AppPublisher "SpAC3"
-#define AppURL       "https://github.com/Anilyldrmm/SpAC3DPI"
-#define AppExe       "SpAC3DPI.exe"
+#define AppURL       "https://github.com/Anilyldrmm/LunaProxy"
+#define AppExe       "LunaProxy.exe"
 
 [Setup]
 AppId={{A1B2C3D4-E5F6-7890-ABCD-EF1234567890}
@@ -16,7 +16,7 @@ DefaultGroupName={#AppName}
 AllowNoIcons=yes
 PrivilegesRequired=admin
 OutputDir=Output
-OutputBaseFilename=SpAC3DPI_Setup_v{#AppVersion}
+OutputBaseFilename=LunaProxy_Setup_v{#AppVersion}
 SetupIconFile=..\icon.ico
 Compression=lzma2/ultra64
 SolidCompression=yes
@@ -51,8 +51,11 @@ Root: HKCU; Subkey: "Software\Microsoft\Windows\CurrentVersion\Run"; \
   Flags: uninsdeletevalue; Tasks: startupicon
 
 [Run]
+; Normal kurulum: son sayfada checkbox olarak göster
 Filename: "{app}\{#AppExe}"; Description: "{#AppName}'i şimdi başlat"; \
   Flags: nowait postinstall skipifsilent runascurrentuser
+; Sessiz kurulum (auto-update): her zaman çalıştır, postinstall atlansın
+Filename: "{app}\{#AppExe}"; Flags: nowait runascurrentuser; Check: WizardSilent
 
 [UninstallRun]
 Filename: "taskkill"; Parameters: "/f /im {#AppExe}"; Flags: runhidden; RunOnceId: "KillApp"
@@ -77,7 +80,7 @@ begin
   if not WebView2Installed then
     MsgBox(
       'Microsoft Edge WebView2 Runtime bulunamadı.' + #13#10 +
-      'SpAC3DPI çalışmak için WebView2 gerektirir.' + #13#10#13#10 +
+      'LunaProxy çalışmak için WebView2 gerektirir.' + #13#10#13#10 +
       'Kurulumdan sonra https://go.microsoft.com/fwlink/p/?LinkId=2124703' + #13#10 +
       'adresinden WebView2 Runtime''ı indirip kurunuz.',
       mbInformation, MB_OK);

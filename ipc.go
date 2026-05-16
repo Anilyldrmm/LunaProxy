@@ -13,8 +13,9 @@ import (
 	qrcode "github.com/skip2/go-qrcode"
 )
 
-// pendingUpdateTag — güncelleme varsa set edilir; pushStatus payload'una eklenir.
+// pendingUpdateTag/URL — güncelleme varsa set edilir; pushStatus payload'una eklenir.
 var pendingUpdateTag atomic.Value
+var pendingUpdateURL atomic.Value
 
 // lastLogSent — pushLogs'un son gönderdiği log index'i (dedup için).
 var lastLogSent atomic.Int64
@@ -138,12 +139,30 @@ func handleIPCMessage(data string) {
 			}
 		}()
 
+	case "setTheme":
+		var p struct {
+			Theme string `json:"theme"`
+		}
+		json.Unmarshal(msg.Payload, &p) //nolint:errcheck
+		if p.Theme == "neutral" || p.Theme == "purple" {
+			c := getConfig()
+			c.Theme = p.Theme
+			setConfig(c) //nolint:errcheck
+		}
+
+	case "ispChanged":
+		var p struct {
+			ISP string `json:"isp"`
+		}
+		json.Unmarshal(msg.Payload, &p) //nolint:errcheck
+		pushISPSuggestion(p.ISP)
+
 	case "requestRouterDefaults":
 		c := getConfig()
 		gateway := guessGatewayIP(g.localIP)
 		data, _ := json.Marshal(map[string]string{
 			"host":    gateway,
-			"user":    "root",
+			"user":    "admin",
 			"port":    "22",
 			"pacPort": fmt.Sprintf("%d", c.PACPort),
 		})
@@ -156,6 +175,7 @@ func startIPCTicker() {
 	ticker := time.NewTicker(2 * time.Second)
 	defer ticker.Stop()
 	for range ticker.C {
+		bwHist.sample()
 		pushStatus()
 		pushLogs()
 	}
@@ -166,6 +186,9 @@ func pushStatus() {
 	s := buildStatus()
 	if tag, ok := pendingUpdateTag.Load().(string); ok && tag != "" {
 		s.UpdateTag = tag
+	}
+	if url, ok := pendingUpdateURL.Load().(string); ok && url != "" {
+		s.UpdateURL = url
 	}
 	data, err := json.Marshal(s)
 	if err != nil {
@@ -198,7 +221,8 @@ func pushQR() {
 	c := getConfig()
 	setupURL := fmt.Sprintf("http://%s:%d/setup", g.localIP, c.PACPort)
 	pcPACURL := fmt.Sprintf("http://%s:%d/proxy.pac", g.localIP, c.PACPort)
-	routerPACURL := fmt.Sprintf("http://%s:8090/cgi-bin/proxy.pac", guessGatewayIP(g.localIP))
+	gw := guessGatewayIP(g.localIP)
+	routerPACURL := fmt.Sprintf("http://%s:8090%s", gw, probeRouterPACPath(gw))
 
 	// QR → setup sayfası (telefon tarayıcısında açılır, PAC URL'ini gösterir)
 	png, err := qrcode.Encode(setupURL, qrcode.High, 200)
@@ -216,10 +240,21 @@ func pushQR() {
 }
 
 // pushSettings — mevcut config'i UI'a gönderir.
+// AutoStart için registry'deki gerçek değer kullanılır.
 func pushSettings() {
 	c := getConfig()
+	c.AutoStart = startupEnabled()
 	data, _ := json.Marshal(c)
 	evalJS(fmt.Sprintf(`loadSettings(%s)`, data))
+}
+
+// pushISPSuggestion — ISP'ye göre önerilen DPI modunu UI'a gönderir.
+func pushISPSuggestion(isp string) {
+	mode := ispRecommendedMode[isp]
+	if mode == "" {
+		return
+	}
+	evalJS(fmt.Sprintf(`showISPSuggestion(%s,%s)`, jsonEscape(isp), jsonEscape(mode)))
 }
 
 // setClipboard — metni Windows clipboard'a yazar.

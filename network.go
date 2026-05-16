@@ -1,13 +1,31 @@
-package main
+﻿package main
 
 import (
 	"fmt"
 	"net"
+	"net/http"
 	"os"
 	"os/exec"
 	"strings"
 	"syscall"
+	"time"
 )
+
+// probeRouterPACPath — router'da gerçekte çalışan PAC path'ini bulur.
+// /pac (yeni kurulum) veya /proxy.pac (eski/Keenetic kurulum) sırasıyla dener.
+func probeRouterPACPath(gateway string) string {
+	c := &http.Client{Timeout: 3 * time.Second}
+	for _, path := range []string{"/pac", "/proxy.pac"} {
+		resp, err := c.Get(fmt.Sprintf("http://%s:8090%s", gateway, path))
+		if err == nil {
+			resp.Body.Close()
+			if resp.StatusCode == 200 {
+				return path
+			}
+		}
+	}
+	return "/pac"
+}
 
 // guessGatewayIP — local IP'den varsayılan gateway'i tahmin eder.
 // 192.168.1.41 → 192.168.1.1
@@ -32,8 +50,8 @@ func getLocalIP() string {
 
 func addFirewallRules(proxyPort, pacPort int) {
 	for _, r := range []struct{ name, port string }{
-		{"SpAC3DPI_Proxy", fmt.Sprintf("%d", proxyPort)},
-		{"SpAC3DPI_PAC", fmt.Sprintf("%d", pacPort)},
+		{"LunaProxy_Proxy", fmt.Sprintf("%d", proxyPort)},
+		{"LunaProxy_PAC", fmt.Sprintf("%d", pacPort)},
 	} {
 		hiddenRun("netsh", "advfirewall", "firewall", "delete", "rule",
 			"name="+r.name)
@@ -64,7 +82,7 @@ func openBrowser(url string) {
 
 // writeTempPNG — QR PNG için yardımcı
 func writeTempPNG(data []byte) (path string, cleanup func()) {
-	f, err := os.CreateTemp("", "spac3dpi_*.png")
+	f, err := os.CreateTemp("", "lunaproxy_*.png")
 	if err != nil {
 		return "", func() {}
 	}

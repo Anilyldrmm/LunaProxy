@@ -9,6 +9,7 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
+
 )
 
 // ── Per-IP cihaz takibi ──────────────────────────────────────────────────────
@@ -16,6 +17,7 @@ import (
 type deviceEntry struct {
 	Bytes       int64
 	ActiveConns int64
+	hostname    atomic.Value // string — reverse DNS, async set edilir, bir kez yazılır
 }
 
 var devices sync.Map // key: string IP, value: *deviceEntry
@@ -25,6 +27,7 @@ type DeviceInfo struct {
 	IP          string `json:"ip"`
 	Bytes       int64  `json:"bytes"`
 	ActiveConns int64  `json:"activeConns"`
+	Hostname    string `json:"hostname"`
 }
 
 func trackDevice(ip string, bytes int64) {
@@ -33,9 +36,32 @@ func trackDevice(ip string, bytes int64) {
 	atomic.AddInt64(&e.Bytes, bytes)
 }
 
+func resolveHostname(ip string) {
+	name := ""
+	// DNS PTR (Windows cihazları, bazı Android)
+	if ns, err := net.LookupAddr(ip); err == nil && len(ns) > 0 {
+		name = strings.TrimSuffix(ns[0], ".")
+	}
+	// mDNS/Bonjour unicast (iPhone, macOS, modern Android)
+	if name == "" {
+		name = mdnsLookup(ip)
+	}
+	if name == "" {
+		return
+	}
+	if v, ok := devices.Load(ip); ok {
+		v.(*deviceEntry).hostname.Store(name)
+	}
+}
+
 func incDeviceConn(ip string) {
-	v, _ := devices.LoadOrStore(ip, &deviceEntry{})
-	atomic.AddInt64(&v.(*deviceEntry).ActiveConns, 1)
+	v, loaded := devices.LoadOrStore(ip, &deviceEntry{})
+	e := v.(*deviceEntry)
+	atomic.AddInt64(&e.ActiveConns, 1)
+	// İlk bağlantıda ya da daha önce hostname çözülemediyse tekrar dene
+	if !loaded || e.hostname.Load() == nil {
+		go resolveHostname(ip)
+	}
 }
 
 func decDeviceConn(ip string) {
@@ -48,10 +74,15 @@ func GetDevices() []DeviceInfo {
 	var list []DeviceInfo
 	devices.Range(func(k, v any) bool {
 		e := v.(*deviceEntry)
+		hn := ""
+		if h := e.hostname.Load(); h != nil {
+			hn = h.(string)
+		}
 		list = append(list, DeviceInfo{
 			IP:          k.(string),
 			Bytes:       atomic.LoadInt64(&e.Bytes),
 			ActiveConns: atomic.LoadInt64(&e.ActiveConns),
+			Hostname:    hn,
 		})
 		return true
 	})

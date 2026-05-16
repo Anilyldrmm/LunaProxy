@@ -1,10 +1,42 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="tr">
 <head>
 <meta charset="UTF-8">
-<title>SpAC3DPI — UI Demo</title>
+<title>LunaProxy — UI Demo</title>
 <style>
 :root {
+  /* Nötr Karanlık (varsayılan) */
+  --bg: #0F1012;
+  --surface: #171A1D;
+  --surface2: #1E2226;
+  --surface3: #252A30;
+  --accent: #3B82F6;
+  --accent-bright: #60A5FA;
+  --accent-glow: #93C5FD;
+  --green: #22C55E;
+  --red: #EF4444;
+  --text: #E8EAED;
+  --sub: #6B7280;
+  --border: #2A2F36;
+  /* Alfa yardımcıları */
+  --a-08: rgba(59,130,246,.08);
+  --a-10: rgba(59,130,246,.10);
+  --a-15: rgba(59,130,246,.15);
+  --a-20: rgba(59,130,246,.20);
+  --a-25: rgba(59,130,246,.25);
+  --a-30: rgba(59,130,246,.30);
+  --a-35: rgba(59,130,246,.35);
+  --a-38: rgba(59,130,246,.38);
+  --a-40: rgba(59,130,246,.40);
+  --a-45: rgba(59,130,246,.45);
+  --a-55: rgba(59,130,246,.55);
+  --a-60: rgba(59,130,246,.60);
+  --a-65: rgba(59,130,246,.65);
+  --a-70: rgba(59,130,246,.70);
+  --btn-grad: linear-gradient(135deg,#2563EB,#1D4ED8);
+  --body-bg: #0F1012;
+}
+:root.theme-purple {
   --bg: #0D0B14;
   --surface: #13101E;
   --surface2: #1A1628;
@@ -12,15 +44,29 @@
   --accent: #8B3FBF;
   --accent-bright: #A855F7;
   --accent-glow: #C084FC;
-  --green: #22C55E;
-  --red: #EF4444;
   --text: #F1F0F5;
   --sub: #6B6490;
   --border: #2A2240;
+  --a-08: rgba(168,85,247,.08);
+  --a-10: rgba(168,85,247,.10);
+  --a-15: rgba(139,63,191,.15);
+  --a-20: rgba(139,63,191,.20);
+  --a-25: rgba(139,63,191,.25);
+  --a-30: rgba(168,85,247,.30);
+  --a-35: rgba(168,85,247,.35);
+  --a-38: rgba(139,63,191,.38);
+  --a-40: rgba(139,63,191,.40);
+  --a-45: rgba(139,63,191,.45);
+  --a-55: rgba(139,63,191,.55);
+  --a-60: rgba(139,63,191,.60);
+  --a-65: rgba(139,63,191,.65);
+  --a-70: rgba(168,85,247,.70);
+  --btn-grad: linear-gradient(135deg,#8B3FBF,#6B21A8);
+  --body-bg: radial-gradient(ellipse at 50% 40%,#1a1035 0%,#08060f 100%);
 }
 * { margin:0; padding:0; box-sizing:border-box; }
 body {
-  background: radial-gradient(ellipse at 50% 40%, #1a1035 0%, #08060f 100%);
+  background: var(--body-bg);
   display:flex; align-items:center; justify-content:center;
   min-height:100vh;
   font-family:'Segoe UI',system-ui,sans-serif;
@@ -87,9 +133,9 @@ body {
   transition:background .15s,color .15s,box-shadow .15s;
   position:relative;
 }
-.nav:hover { background:rgba(168,85,247,.1); color:var(--accent-glow); }
+.nav:hover { background:var(--a-10); color:var(--accent-glow); }
 .nav.active {
-  background:rgba(139,63,191,.2); color:var(--accent-bright);
+  background:var(--a-20); color:var(--accent-bright);
   box-shadow:inset 3px 0 0 var(--accent-bright);
 }
 .nav svg { width:20px; height:20px; }
@@ -143,13 +189,13 @@ body {
   transition:border-color .4s,box-shadow .4s;
 }
 .logo-ring.on {
-  border-color:rgba(168,85,247,.5);
-  box-shadow:0 0 28px rgba(139,63,191,.4);
+  border-color:var(--a-35);
+  box-shadow:0 0 28px var(--a-40);
   animation:ringPulse 2.5s ease-in-out infinite;
 }
 @keyframes ringPulse {
-  0%,100% { box-shadow:0 0 14px rgba(139,63,191,.25); border-color:rgba(168,85,247,.3); }
-  50%      { box-shadow:0 0 36px rgba(139,63,191,.6); border-color:rgba(168,85,247,.7); }
+  0%,100% { box-shadow:0 0 14px var(--a-25); border-color:var(--a-30); }
+  50%      { box-shadow:0 0 36px var(--a-60); border-color:var(--a-70); }
 }
 .logo-box {
   width:84px; height:84px; border-radius:20px;
@@ -161,7 +207,7 @@ body {
   transition:box-shadow .4s;
 }
 .logo-box.on {
-  box-shadow:0 0 0 2px rgba(168,85,247,.35),0 10px 40px rgba(139,63,191,.6);
+  box-shadow:0 0 0 2px var(--a-35),0 10px 40px var(--a-60);
 }
 .logo-box::after {
   content:''; position:absolute; inset:0;
@@ -189,19 +235,19 @@ body {
 /* Toggle button */
 .toggle-btn {
   width:100%; height:50px; border-radius:50px; border:none;
-  background:linear-gradient(135deg,#8B3FBF,#6B21A8);
+  background:var(--btn-grad);
   color:#fff; font-size:14px; font-weight:700; letter-spacing:.5px;
   cursor:pointer; display:flex; align-items:center; justify-content:center; gap:9px;
   transition:all .2s; margin-bottom:16px;
-  box-shadow:0 4px 22px rgba(139,63,191,.45);
+  box-shadow:0 4px 22px var(--a-45);
 }
-.toggle-btn:hover { transform:translateY(-2px); box-shadow:0 8px 34px rgba(139,63,191,.65); }
+.toggle-btn:hover { transform:translateY(-2px); box-shadow:0 8px 34px var(--a-65); }
 .toggle-btn:active { transform:translateY(0); }
 .toggle-btn.stop {
   background:linear-gradient(135deg,#DC2626,#991B1B);
   box-shadow:0 4px 22px rgba(239,68,68,.4);
 }
-.toggle-btn.stop:hover { box-shadow:0 8px 34px rgba(239,68,68,.55); }
+.toggle-btn.stop:hover { box-shadow:0 8px 34px rgba(239,68,68,.6); }
 
 /* Stats */
 .stats { display:flex; justify-content:space-around; margin-bottom:14px; }
@@ -224,7 +270,7 @@ body {
 .ph-title { font-size:15px; font-weight:700; color:var(--text); }
 .ph-badge {
   font-size:11px; font-weight:600; color:var(--accent-bright);
-  background:rgba(168,85,247,.15); padding:3px 10px; border-radius:20px;
+  background:var(--a-15); padding:3px 10px; border-radius:20px;
 }
 .device {
   background:var(--surface); border:1px solid var(--border); border-radius:10px;
@@ -237,10 +283,10 @@ body {
   from { opacity:0; transform:translateY(-6px); }
   to   { opacity:1; transform:translateY(0); }
 }
-.device:hover { border-color:rgba(168,85,247,.35); }
+.device:hover { border-color:var(--a-35); }
 .dev-icon {
   width:36px; height:36px; border-radius:9px;
-  background:rgba(139,63,191,.2);
+  background:var(--a-20);
   display:flex; align-items:center; justify-content:center; flex-shrink:0;
   color:var(--accent-bright);
 }
@@ -261,6 +307,32 @@ body {
 }
 .empty svg { width:40px; height:40px; opacity:.35; }
 .empty p { font-size:13px; }
+
+/* ── Bant genişliği grafiği ── */
+.bw-chart-wrap { margin-bottom:10px; }
+.bw-svg { width:100%; height:56px; display:block; overflow:visible; }
+.bw-footer { display:flex; justify-content:space-between; font-size:10px; color:var(--sub); margin-top:2px; }
+
+/* ── ISP öneri ── */
+.isp-hint {
+  display:none; font-size:11px; color:#F59E0B;
+  background:rgba(245,158,11,.08); border:1px solid rgba(245,158,11,.2);
+  border-radius:7px; padding:7px 10px; margin-top:-6px; margin-bottom:8px; line-height:1.5;
+}
+.isp-hint.vis { display:block; }
+.isp-hint b { cursor:pointer; text-decoration:underline; text-underline-offset:2px; }
+
+/* ── Bypass textarea ── */
+.bypass-ta {
+  width:100%; background:var(--surface2); border:1px solid var(--border);
+  border-radius:8px; color:var(--text); padding:9px 12px; font-size:11px;
+  font-family:Consolas,monospace; outline:none; resize:vertical;
+  min-height:140px; line-height:1.6; margin-bottom:4px; transition:border-color .2s;
+}
+.bypass-ta:focus { border-color:var(--accent); }
+.bypass-ta::placeholder { color:var(--sub); }
+#bypass-domain-card { transition:opacity .2s; }
+#bypass-domain-card.dim { opacity:.35; pointer-events:none; }
 
 /* ── SETTINGS panel ── */
 .s-label { font-size:10px; text-transform:uppercase; letter-spacing:.8px; color:var(--sub); font-weight:600; margin-bottom:6px; }
@@ -285,8 +357,8 @@ body {
   border-radius:8px; cursor:pointer; border:1px solid transparent;
   transition:all .15s;
 }
-.radio-item:hover { background:rgba(168,85,247,.08); }
-.radio-item.sel { background:rgba(139,63,191,.15); border-color:rgba(139,63,191,.4); }
+.radio-item:hover { background:var(--a-08); }
+.radio-item.sel { background:var(--a-15); border-color:var(--a-40); }
 .rdot {
   width:16px; height:16px; border-radius:50%; border:2px solid var(--border);
   display:flex; align-items:center; justify-content:center; flex-shrink:0;
@@ -318,17 +390,17 @@ body {
   background:var(--sub); border-radius:50%;
   transition:transform .2s,background .2s;
 }
-.sw input:checked ~ .sw-track { background:rgba(139,63,191,.4); border-color:var(--accent); }
+.sw input:checked ~ .sw-track { background:var(--a-40); border-color:var(--accent); }
 .sw input:checked ~ .sw-track::before { transform:translateX(18px); background:var(--accent-bright); }
 
 .save-btn {
   width:100%; height:44px; border-radius:10px; border:none;
-  background:linear-gradient(135deg,#8B3FBF,#6B21A8);
+  background:var(--btn-grad);
   color:#fff; font-size:13px; font-weight:700; cursor:pointer;
-  margin-top:4px; box-shadow:0 4px 18px rgba(139,63,191,.35);
+  margin-top:4px; box-shadow:0 4px 18px var(--a-35);
   transition:all .2s;
 }
-.save-btn:hover { transform:translateY(-1px); box-shadow:0 6px 26px rgba(139,63,191,.55); }
+.save-btn:hover { transform:translateY(-1px); box-shadow:0 6px 26px var(--a-55); }
 
 /* ── MOBILE panel ── */
 .url-row { display:flex; gap:8px; align-items:center; margin-bottom:12px; }
@@ -339,16 +411,16 @@ body {
 }
 .cp-btn {
   padding:9px 14px; border-radius:8px; border:none;
-  background:rgba(139,63,191,.2); color:var(--accent-bright);
+  background:var(--a-20); color:var(--accent-bright);
   font-size:12px; font-weight:700; cursor:pointer;
   transition:background .15s; white-space:nowrap;
 }
-.cp-btn:hover { background:rgba(139,63,191,.38); }
+.cp-btn:hover { background:var(--a-38); }
 .cp-btn.copied { background:rgba(34,197,94,.2); color:var(--green); }
 .qr-wrap { display:flex; justify-content:center; margin:14px 0; }
 .qr-box {
   width:160px; height:160px; background:#fff; border-radius:12px; padding:10px;
-  box-shadow:0 0 0 1px rgba(168,85,247,.2), 0 8px 32px rgba(0,0,0,.5);
+  box-shadow:0 0 0 1px var(--a-20), 0 8px 32px rgba(0,0,0,.5);
 }
 .instruct {
   background:var(--surface); border:1px solid var(--border);
@@ -391,6 +463,44 @@ body {
   color:var(--green); font-size:13px; font-weight:700; display:none;
 }
 .rt-done.visible { display:block; }
+.rt-tabs { display:flex; gap:4px; margin-bottom:12px; }
+.rt-tab {
+  flex:1; padding:7px 4px; text-align:center; font-size:11px; font-weight:600;
+  color:var(--sub); background:var(--surface2); border-radius:8px;
+  cursor:pointer; border:1px solid var(--border); transition:.15s;
+}
+.rt-tab.active { background:var(--a-15); color:var(--accent-bright); border-color:var(--a-35); }
+.rt-tab:hover:not(.active) { background:var(--a-08); color:var(--text); }
+.rt-tabcontent { display:none; }
+.rt-tabcontent.active { display:block; }
+.rt-guide-step {
+  display:flex; gap:10px; align-items:flex-start;
+  padding:9px 0; border-bottom:1px solid var(--border); font-size:12px;
+}
+.rt-guide-step:last-child { border-bottom:none; }
+.rt-guide-num {
+  flex-shrink:0; width:20px; height:20px; border-radius:50%;
+  background:var(--a-20); color:var(--accent-bright);
+  font-size:11px; font-weight:700; display:flex; align-items:center; justify-content:center;
+}
+.rt-guide-text { color:var(--text); line-height:1.6; }
+.rt-guide-text b { color:var(--accent-glow); }
+.rt-pac-box {
+  background:var(--surface2); border:1px solid var(--border);
+  border-radius:8px; padding:8px 10px; font-family:Consolas,monospace;
+  font-size:11px; color:var(--accent-bright); margin:6px 0;
+  word-break:break-all; cursor:pointer; transition:.15s;
+}
+.rt-pac-box:hover { border-color:var(--a-35); background:var(--a-08); }
+.rt-os-tabs { display:flex; gap:4px; margin-bottom:10px; }
+.rt-os-tab {
+  padding:4px 10px; font-size:10px; font-weight:600; border-radius:6px;
+  cursor:pointer; color:var(--sub); background:var(--surface3);
+  border:1px solid var(--border); transition:.15s;
+}
+.rt-os-tab.active { background:var(--a-15); color:var(--accent-bright); border-color:var(--a-35); }
+.rt-os-content { display:none; }
+.rt-os-content.active { display:block; }
 
 /* ── LOGS panel ── */
 .log-bar {
@@ -429,6 +539,10 @@ window.addEventListener('DOMContentLoaded', function() {
     var s1 = document.getElementById('tbl-s'); if (s1) s1.style.display = 'none';
     var s2 = document.getElementById('lbox-s'); if (s2) s2.style.display = 'none';
   }
+  if (window.__version) {
+    var vl = document.getElementById('tb-sub-line');
+    if (vl) vl.textContent = 'v' + window.__version + ' · DPI Bypass Proxy · by SpAC3';
+  }
 });
 </script>
 </head>
@@ -439,8 +553,8 @@ window.addEventListener('DOMContentLoaded', function() {
   <div class="titlebar" id="titlebar">
     <div class="tb-logo"><img class="tb-logo-img" src="" alt="" style="display:none;width:28px;height:28px;object-fit:cover;border-radius:8px"><span id="tbl-s">S</span></div>
     <div>
-      <div class="tb-name">SpAC3DPI</div>
-      <div class="tb-sub">DPI Bypass Proxy</div>
+      <div class="tb-name">LunaProxy</div>
+      <div class="tb-sub" id="tb-sub-line">DPI Bypass Proxy · by SpAC3</div>
     </div>
     <div class="tb-spacer"></div>
     <div class="tb-btn" onclick="window.goMessage(JSON.stringify({type:'windowMinimize'}))">—</div>
@@ -488,6 +602,12 @@ window.addEventListener('DOMContentLoaded', function() {
         </svg>
         <div class="tooltip">Router</div>
       </div>
+      <div class="nav" data-p="domains" onclick="go(this)">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+          <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/>
+        </svg>
+        <div class="tooltip">Domainler</div>
+      </div>
       <div class="nav" data-p="logs" onclick="go(this)">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
           <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>
@@ -509,7 +629,7 @@ window.addEventListener('DOMContentLoaded', function() {
               <span id="lbox-s">S</span>
             </div>
           </div>
-          <div class="status-title">SpAC3DPI</div>
+          <div class="status-title">LunaProxy</div>
           <div class="dot-row">
             <div class="dot" id="sdot"></div>
             <div class="status-label" id="slabel">BAĞLI DEĞİL</div>
@@ -517,9 +637,10 @@ window.addEventListener('DOMContentLoaded', function() {
           <div class="ip-label" id="sip" style="opacity:0">192.168.1.41 : 8888</div>
         </div>
 
-        <div id="update-banner" style="display:none;background:rgba(139,63,191,.2);border:1px solid rgba(168,85,247,.4);border-radius:8px;padding:10px 14px;margin-bottom:12px;font-size:12px;color:#A855F7;align-items:center;gap:8px">
+        <div id="update-banner" style="display:none;background:var(--a-20);border:1px solid var(--a-40);border-radius:8px;padding:10px 14px;margin-bottom:12px;font-size:12px;color:var(--accent-bright);align-items:center;gap:8px">
           <span id="update-text"></span>
-          <button onclick="doUpdate()" style="margin-left:auto;padding:5px 12px;border-radius:6px;border:none;background:#8B3FBF;color:#fff;font-size:11px;font-weight:700;cursor:pointer">Güncelle</button>
+          <button id="update-btn" onclick="doUpdate()" style="margin-left:auto;padding:5px 12px;border-radius:6px;border:none;background:var(--accent);color:#fff;font-size:11px;font-weight:700;cursor:pointer">Güncelle</button>
+          <button onclick="dismissUpdate()" style="padding:5px 8px;border-radius:6px;border:1px solid var(--a-40);background:transparent;color:var(--sub);font-size:11px;cursor:pointer">✕</button>
         </div>
 
         <button class="toggle-btn" id="tbtn" onclick="toggle()">
@@ -557,6 +678,12 @@ window.addEventListener('DOMContentLoaded', function() {
           <div class="kv"><span class="kv-k">Chunk</span><span class="kv-v">40 byte</span></div>
           <div class="kv"><span class="kv-k">ISP</span><span class="kv-v">Otomatik</span></div>
         </div>
+
+        <div class="card bw-chart-wrap">
+          <div class="card-title">Bant Genişliği <span id="bw-cur" style="float:right;font-size:10px;font-weight:400;color:var(--accent-bright)">0.00 MB/s</span></div>
+          <svg id="bw-svg" class="bw-svg" viewBox="0 0 240 56" preserveAspectRatio="none"></svg>
+          <div class="bw-footer"><span>2 dk önce</span><span>Şimdi</span></div>
+        </div>
       </div>
 
       <!-- DEVICES -->
@@ -588,9 +715,23 @@ window.addEventListener('DOMContentLoaded', function() {
         <div class="card">
           <div class="card-title">ISP & DNS</div>
           <div class="s-label">İnternet Sağlayıcı</div>
-          <select class="s-select"><option>Otomatik</option><option>Superonline / UltraNet</option><option>Türk Telekom (TTNet)</option><option>Vodafone TR</option><option>Turkcell</option></select>
+          <select class="s-select" id="sel-isp" onchange="onISPChange(this.value)">
+            <option value="auto">Otomatik</option>
+            <option value="superonline">Superonline / UltraNet</option>
+            <option value="ttnet">Türk Telekom (TTNet)</option>
+            <option value="vodafone">Vodafone TR</option>
+            <option value="turkcell">Turkcell</option>
+          </select>
+          <div class="isp-hint" id="isp-hint">Öneri: <b id="isp-hint-mode" onclick="applyISPSuggestion()"></b> modu — tıklayarak uygula</div>
           <div class="s-label">DNS Şifreleme</div>
-          <select class="s-select"><option>Değiştirilmedi</option><option>Cloudflare (1.1.1.1)</option><option>Google (8.8.8.8)</option><option>AdGuard DNS</option><option>Quad9</option></select>
+          <select class="s-select" id="sel-dns">
+            <option value="unchanged">Değiştirilmedi</option>
+            <option value="cloudflare">Cloudflare (1.1.1.1)</option>
+            <option value="google">Google (8.8.8.8)</option>
+            <option value="adguard">AdGuard DNS</option>
+            <option value="quad9">Quad9</option>
+            <option value="opendns">OpenDNS</option>
+          </select>
         </div>
         <div class="card">
           <div class="card-title">Sistem</div>
@@ -613,6 +754,13 @@ window.addEventListener('DOMContentLoaded', function() {
           <input type="number" id="inp-proxy-port" class="s-input" value="8888">
           <div class="s-label">PAC Portu</div>
           <input type="number" id="inp-pac-port" class="s-input" value="8080">
+        </div>
+        <div class="card">
+          <div class="card-title">Görünüm</div>
+          <div class="radio-group" id="theme-group">
+            <div class="radio-item sel" data-theme="neutral" onclick="setTheme('neutral')"><div class="rdot"></div><div><div class="rtxt">Nötr Karanlık</div><div class="rsub">Gri-siyah, mavi vurgu</div></div></div>
+            <div class="radio-item" data-theme="purple" onclick="setTheme('purple')"><div class="rdot"></div><div><div class="rtxt">Mor</div><div class="rsub">Klasik mor tema</div></div></div>
+          </div>
         </div>
         <button class="save-btn" onclick="saveSettings()">Ayarları Kaydet</button>
       </div>
@@ -649,31 +797,126 @@ window.addEventListener('DOMContentLoaded', function() {
       <!-- ROUTER -->
       <div class="panel" id="panel-router">
         <div class="ph"><div class="ph-title">Router Entegrasyonu</div></div>
-        <div class="rt-badge">GELİŞMİŞ — OpenWrt + Entware gerektirir</div>
-        <div class="card" style="margin-bottom:10px">
-          <div class="card-title">Ne işe yarar?</div>
-          <div style="font-size:12px;color:var(--sub);line-height:1.7">
-            PC kapalıyken telefon proxy yerine dogrudan (DIRECT) baglanir.
-            Router kurulumu olmadan PC kapalıyken kisa bir gecikme yasanir.
+        <div class="rt-tabs">
+          <div class="rt-tab active" onclick="rtTab(this,'ssh')">SSH Kurulumu</div>
+          <div class="rt-tab" onclick="rtTab(this,'guide')">Cihaz Rehberi</div>
+        </div>
+
+        <!-- SSH Kurulumu -->
+        <div class="rt-tabcontent active" id="rtc-ssh">
+          <div class="rt-badge">GELİŞMİŞ — OpenWrt + Entware gerektirir</div>
+          <div class="card" style="margin-bottom:10px">
+            <div class="card-title">Ne işe yarar?</div>
+            <div style="font-size:12px;color:var(--sub);line-height:1.7">
+              PC kapalıyken telefon proxy yerine dogrudan (DIRECT) baglanir.
+              Router kurulumu olmadan PC kapalıyken kisa bir gecikme yasanir.
+            </div>
+          </div>
+          <div class="s-label">Router Baglantisi</div>
+          <div class="rt-form">
+            <input class="s-input" id="rt-host" placeholder="Router IP (örn: 192.168.1.1)" style="margin-bottom:0">
+            <div class="rt-row">
+              <input class="s-input" id="rt-port" placeholder="SSH Port (22)" style="flex:0 0 110px">
+              <input class="s-input" id="rt-user" placeholder="Kullanici (admin)">
+            </div>
+            <input class="s-input" id="rt-pass" type="password" placeholder="SSH Sifresi" style="margin-bottom:0">
+          </div>
+          <div style="display:flex;gap:8px;margin-bottom:12px">
+            <button class="save-btn" style="flex:1" onclick="routerSetup()">Kur</button>
+            <button class="save-btn" style="flex:0 0 80px;background:var(--surface2);color:var(--sub);box-shadow:none;border:1px solid var(--border)" onclick="routerTest()">Test</button>
+          </div>
+          <div class="rt-steps" id="rt-steps"></div>
+          <div class="rt-done" id="rt-done">
+            Kurulum tamamlandi — Mobil panelden QR kodunu kullanabilirsin
           </div>
         </div>
-        <div class="s-label">Router Baglantisi</div>
-        <div class="rt-form">
-          <input class="s-input" id="rt-host" placeholder="Router IP (örn: 192.168.1.1)" style="margin-bottom:0">
-          <div class="rt-row">
-            <input class="s-input" id="rt-port" placeholder="SSH Port (22)" style="flex:0 0 110px">
-            <input class="s-input" id="rt-user" placeholder="Kullanici (root)">
+
+        <!-- Cihaz Rehberi -->
+        <div class="rt-tabcontent" id="rtc-guide">
+          <div class="card" style="margin-bottom:10px">
+            <div class="card-title">PAC URL</div>
+            <div style="font-size:11px;color:var(--sub);margin-bottom:6px">
+              Asagidaki URL'yi cihazinizin proxy ayarlarına girin. Tiklayin kopyalayin.
+            </div>
+            <div class="rt-pac-box" id="guide-pac-url" onclick="copyPacUrl()">—</div>
           </div>
-          <input class="s-input" id="rt-pass" type="password" placeholder="SSH Sifresi" style="margin-bottom:0">
+
+          <div class="rt-os-tabs">
+            <div class="rt-os-tab active" onclick="rtOsTab(this,'ios')">iOS</div>
+            <div class="rt-os-tab" onclick="rtOsTab(this,'android')">Android</div>
+            <div class="rt-os-tab" onclick="rtOsTab(this,'dhcp')">DHCP Otomatik</div>
+          </div>
+
+          <!-- iOS -->
+          <div class="rt-os-content active" id="rtos-ios">
+            <div class="card">
+              <div class="card-title">iPhone / iPad</div>
+              <div class="rt-guide-step"><div class="rt-guide-num">1</div><div class="rt-guide-text">Ayarlar → <b>Wi-Fi</b> → agınızın yanındaki <b>ⓘ</b></div></div>
+              <div class="rt-guide-step"><div class="rt-guide-num">2</div><div class="rt-guide-text"><b>Proxy Yapılandır</b> → <b>Otomatik</b> seçin</div></div>
+              <div class="rt-guide-step"><div class="rt-guide-num">3</div><div class="rt-guide-text">URL alanına <b>PAC URL</b>'ini yapıştırın</div></div>
+              <div class="rt-guide-step"><div class="rt-guide-num">4</div><div class="rt-guide-text"><b>Kaydet</b> → Tarayıcıyı açın, test edin</div></div>
+            </div>
+          </div>
+
+          <!-- Android -->
+          <div class="rt-os-content" id="rtos-android">
+            <div class="card">
+              <div class="card-title">Android</div>
+              <div class="rt-guide-step"><div class="rt-guide-num">1</div><div class="rt-guide-text">Ayarlar → <b>Wi-Fi</b> → agınıza uzun basın → <b>Ağı Düzenle</b></div></div>
+              <div class="rt-guide-step"><div class="rt-guide-num">2</div><div class="rt-guide-text"><b>Gelişmiş seçenekler</b> → Proxy: <b>PAC otomatik yapılandırması</b></div></div>
+              <div class="rt-guide-step"><div class="rt-guide-num">3</div><div class="rt-guide-text">PAC URL alanına <b>PAC URL</b>'ini yapıştırın</div></div>
+              <div class="rt-guide-step"><div class="rt-guide-num">4</div><div class="rt-guide-text"><b>Kaydet</b> → Test edin</div></div>
+              <div style="font-size:11px;color:var(--sub);margin-top:8px;line-height:1.6">
+                Bazı Android surumleri (10+) Wi-Fi baskasına geçince proxy sıfırlayabilir. Bu durumda VPN uygulaması deneyin.
+              </div>
+            </div>
+          </div>
+
+          <!-- DHCP Option 252 -->
+          <div class="rt-os-content" id="rtos-dhcp">
+            <div class="card">
+              <div class="card-title">DHCP Option 252 — Tum Agı Otomatik Konfigüre Et</div>
+              <div style="font-size:12px;color:var(--sub);line-height:1.7;margin-bottom:10px">
+                Desteklenen modеmlerde DHCP Option 252 ile PAC URL'ini tüm agа otomatik dagitabilirsiniz. Her cihaza ayrıca ayar yapmanıza gerek kalmaz.
+              </div>
+              <div class="rt-guide-step"><div class="rt-guide-num">1</div><div class="rt-guide-text">Modem arayüzüne girin (genellikle <b>192.168.1.1</b>)</div></div>
+              <div class="rt-guide-step"><div class="rt-guide-num">2</div><div class="rt-guide-text"><b>LAN → DHCP Sunucusu → DHCP Seçenekleri</b> (veya Advanced DHCP Options)</div></div>
+              <div class="rt-guide-step"><div class="rt-guide-num">3</div><div class="rt-guide-text">Yeni seçenek ekle: <b>Kod: 252</b> · Tür: <b>String</b> · Değer: PAC URL</div></div>
+              <div class="rt-guide-step"><div class="rt-guide-num">4</div><div class="rt-guide-text">Kaydet → Cihazları Wi-Fi'den çıkarıp tekrar bağlayın</div></div>
+              <div style="margin-top:10px;padding:8px;background:rgba(245,158,11,.08);border:1px solid rgba(245,158,11,.2);border-radius:8px;font-size:11px;color:#F59E0B;line-height:1.6">
+                <b>Destek:</b> ZTE (F660/F680), TP-Link Archer, ASUS, MikroTik. TTNet'in bazı Huawei modemleri bu ayarı gizlemiş olabilir.
+                iOS ve macOS destekler. Windows/Android tarayıcı bazlıdır.
+              </div>
+            </div>
+          </div>
         </div>
-        <div style="display:flex;gap:8px;margin-bottom:12px">
-          <button class="save-btn" style="flex:1" onclick="routerSetup()">Kur</button>
-          <button class="save-btn" style="flex:0 0 80px;background:var(--surface2);color:var(--sub);box-shadow:none;border:1px solid var(--border)" onclick="routerTest()">Test</button>
+      </div>
+
+      <!-- DOMAINS -->
+      <div class="panel" id="panel-domains">
+        <div class="card">
+          <div class="card-title">Domain Filtresi</div>
+          <div class="sw-row" style="margin-bottom:0">
+            <div>
+              <div class="sw-label">Yalnızca listede proxy'ye yönlendir</div>
+              <div class="sw-sub">Kapalıyken tüm trafik DPI bypass'tan geçer</div>
+            </div>
+            <label class="sw"><input type="checkbox" id="sw-bypass-enabled" onchange="onBypassToggle(this.checked)"><div class="sw-track"></div></label>
+          </div>
         </div>
-        <div class="rt-steps" id="rt-steps"></div>
-        <div class="rt-done" id="rt-done">
-          Kurulum tamamlandi — Mobil panelden QR kodunu kullanabilirsin
+        <div class="card" id="bypass-domain-card">
+          <div class="card-title" style="margin-bottom:6px">Domain Listesi</div>
+          <div style="font-size:11px;color:var(--sub);margin-bottom:10px;line-height:1.6">
+            Her satıra bir domain. Listedeki domainler proxy üzerinden bağlanır, diğerleri doğrudan bağlanır.
+          </div>
+          <div style="display:flex;gap:6px;margin-bottom:8px">
+            <button class="cp-btn" style="font-size:10px;padding:4px 10px" onclick="resetBypassDefaults()">Varsayılanları Yükle</button>
+            <button class="cp-btn" style="font-size:10px;padding:4px 10px;background:transparent;border:1px solid var(--border);color:var(--sub)" onclick="document.getElementById('inp-bypass').value=''">Listeyi Temizle</button>
+          </div>
+          <textarea id="inp-bypass" class="bypass-ta" placeholder="discord.com&#10;roblox.com&#10;youtube.com" oninput="updateBypassCount()"></textarea>
+          <div style="font-size:10px;color:var(--sub);margin-top:4px;text-align:right" id="bypass-count">0 domain</div>
         </div>
+        <button class="save-btn" onclick="saveSettings()">Kaydet</button>
       </div>
 
       <!-- LOGS -->
@@ -723,7 +966,29 @@ function p(n){return String(n).padStart(2,'0')}
 function fmtB(b){if(b<1024)return b+' B';if(b<1048576)return(b/1024).toFixed(1)+' KB';return(b/1048576).toFixed(1)+' MB'}
 
 // Radio
-function selR(el,g){document.querySelectorAll('.radio-item').forEach(r=>r.classList.remove('sel'));el.classList.add('sel');}
+function selR(el,g){el.closest('.radio-group').querySelectorAll('.radio-item').forEach(r=>r.classList.remove('sel'));el.classList.add('sel');}
+
+// Tema
+var _currentTheme = 'neutral';
+function applyTheme(t) {
+  _currentTheme = t;
+  document.documentElement.classList.toggle('theme-purple', t === 'purple');
+  document.querySelectorAll('[data-theme]').forEach(function(el) {
+    el.classList.toggle('sel', el.dataset.theme === t);
+  });
+}
+function setTheme(t) {
+  applyTheme(t);
+  try { localStorage.setItem('theme', t); } catch(e) {}
+  if (typeof window.goMessage === 'function') {
+    window.goMessage(JSON.stringify({type:'setTheme', payload:{theme:t}}));
+  }
+}
+(function initTheme() {
+  var t = 'neutral';
+  try { t = localStorage.getItem('theme') || 'neutral'; } catch(e) {}
+  applyTheme(t);
+})();
 
 // Save animation
 function savedAnim(btn){
@@ -735,8 +1000,14 @@ function savedAnim(btn){
 
 // Save settings (real IPC)
 function saveSettings() {
+  var bypassRaw = (document.getElementById('inp-bypass') || {value:''}).value || '';
+  var bypassDomains = bypassRaw.split('\n').map(function(s){return s.trim();}).filter(Boolean);
   var cfg = {
     dpi_mode: (document.querySelector('.radio-item.sel[data-val]') || {dataset:{val:'balanced'}}).dataset.val || 'balanced',
+    isp: (document.getElementById('sel-isp') || {value:'auto'}).value || 'auto',
+    dns_mode: (document.getElementById('sel-dns') || {value:'unchanged'}).value || 'unchanged',
+    bypass_enabled: !!(document.getElementById('sw-bypass-enabled') || {}).checked,
+    bypass_domains: bypassDomains,
     set_system_proxy: !!(document.getElementById('sw-sysproxy') || {}).checked,
     auto_start: !!(document.getElementById('sw-autostart') || {}).checked,
     proxy_auto_start: !!(document.getElementById('sw-proxy-autostart') || {}).checked,
@@ -748,6 +1019,119 @@ function saveSettings() {
 
 // Clear logs
 function clearLogs() { window.goMessage(JSON.stringify({type:'clearLogs'})); }
+
+function rtTab(el, id) {
+  el.closest('.rt-tabs').querySelectorAll('.rt-tab').forEach(function(t){t.classList.remove('active');});
+  el.classList.add('active');
+  document.querySelectorAll('.rt-tabcontent').forEach(function(c){c.classList.remove('active');});
+  document.getElementById('rtc-'+id).classList.add('active');
+}
+function rtOsTab(el, id) {
+  el.closest('.rt-os-tabs').querySelectorAll('.rt-os-tab').forEach(function(t){t.classList.remove('active');});
+  el.classList.add('active');
+  document.querySelectorAll('.rt-os-content').forEach(function(c){c.classList.remove('active');});
+  document.getElementById('rtos-'+id).classList.add('active');
+}
+function copyPacUrl() {
+  var box = document.getElementById('guide-pac-url');
+  if (!box) return;
+  var url = box.textContent.trim();
+  if (!url || url === '—') return;
+  if (navigator.clipboard) {
+    navigator.clipboard.writeText(url);
+  } else {
+    var ta = document.createElement('textarea');
+    ta.value = url;
+    document.body.appendChild(ta);
+    ta.select();
+    document.execCommand('copy');
+    document.body.removeChild(ta);
+  }
+  box.style.borderColor='var(--green)';
+  setTimeout(function(){box.style.borderColor='';},1500);
+}
+// ── Bant genişliği grafiği ──────────────────────────────────────────────────
+function updateBWChart(pts) {
+  if (!pts || pts.length < 2) return;
+  var max = Math.max.apply(null, pts);
+  if (max < 0.001) max = 0.001;
+  var W = 240, H = 56, n = pts.length;
+  var step = W / (n - 1);
+  var linePts = '', fillPts = '';
+  for (var i = 0; i < n; i++) {
+    var x = (i * step).toFixed(1);
+    var y = (H - (pts[i] / max) * (H - 4) - 2).toFixed(1);
+    linePts += (i === 0 ? 'M' : 'L') + x + ',' + y;
+    fillPts += (i === 0 ? 'M' : 'L') + x + ',' + y;
+  }
+  fillPts += ' L' + W + ',' + H + ' L0,' + H + ' Z';
+  var svg = document.getElementById('bw-svg');
+  if (!svg) return;
+  svg.innerHTML = '<defs><linearGradient id="bwg" x1="0" y1="0" x2="0" y2="1">'
+    + '<stop offset="0%" stop-color="var(--accent)" stop-opacity="0.45"/>'
+    + '<stop offset="100%" stop-color="var(--accent)" stop-opacity="0.03"/>'
+    + '</linearGradient></defs>'
+    + '<path d="' + fillPts + '" fill="url(#bwg)"/>'
+    + '<path d="' + linePts + '" fill="none" stroke="var(--accent-bright)" stroke-width="1.5" stroke-linejoin="round"/>';
+  var cur = document.getElementById('bw-cur');
+  if (cur) cur.textContent = pts[pts.length - 1].toFixed(2) + ' MB/s';
+}
+
+// ── ISP öneri ───────────────────────────────────────────────────────────────
+var _ispSuggestMode = '';
+var _ispModeNames = {turbo:'Turbo', balanced:'Dengeli', powerful:'Güçlü'};
+function onISPChange(val) {
+  var map = {ttnet:'powerful', vodafone:'powerful', turkcell:'balanced', superonline:'balanced'};
+  var rec = map[val] || '';
+  _ispSuggestMode = rec;
+  var hint = document.getElementById('isp-hint');
+  var hm = document.getElementById('isp-hint-mode');
+  if (!hint) return;
+  if (rec) {
+    hint.classList.add('vis');
+    if (hm) hm.textContent = _ispModeNames[rec] || rec;
+  } else {
+    hint.classList.remove('vis');
+  }
+}
+function showISPSuggestion(isp, mode) {
+  _ispSuggestMode = mode;
+  var hint = document.getElementById('isp-hint');
+  var hm = document.getElementById('isp-hint-mode');
+  if (!hint) return;
+  hint.classList.add('vis');
+  if (hm) hm.textContent = _ispModeNames[mode] || mode;
+}
+var _defaultBypassDomains = [
+  'discord.com','discordapp.com','discord.gg','discordapp.net',
+  'gateway.discord.gg','cdn.discordapp.com','media.discordapp.net','dl.discordapp.net',
+  'roblox.com','rbxcdn.com','roproxy.com','rbxtrk.com',
+  'apis.roblox.com','assetdelivery.roblox.com'
+];
+function onBypassToggle(checked) {
+  var card = document.getElementById('bypass-domain-card');
+  if (card) card.classList.toggle('dim', !checked);
+}
+function resetBypassDefaults() {
+  var ta = document.getElementById('inp-bypass');
+  if (ta) { ta.value = _defaultBypassDomains.join('\n'); updateBypassCount(); }
+}
+function updateBypassCount() {
+  var ta = document.getElementById('inp-bypass');
+  var cnt = document.getElementById('bypass-count');
+  if (!ta || !cnt) return;
+  var n = ta.value.split('\n').map(function(s){return s.trim();}).filter(Boolean).length;
+  cnt.textContent = n + ' domain';
+}
+
+function applyISPSuggestion() {
+  if (!_ispSuggestMode) return;
+  document.querySelectorAll('.radio-item[data-val]').forEach(function(el) {
+    el.classList.toggle('sel', el.dataset.val === _ispSuggestMode);
+  });
+  var hint = document.getElementById('isp-hint');
+  if (hint) hint.classList.remove('vis');
+}
 
 function routerSetup() {
   var host = document.getElementById('rt-host').value.trim();
@@ -873,8 +1257,15 @@ function updateStatus(s) {
   var devs = s.Devices||s.devices;
   if (devs) updateDevices(devs);
 
+  var pacUrl = s.PACUrl||s.pacUrl||'';
+  if (pacUrl) { var gp = document.getElementById('guide-pac-url'); if (gp) gp.textContent = pacUrl; }
+
+  var bwh = s.BandwidthHistory||s.bwHistory;
+  if (bwh) updateBWChart(bwh);
+
   var tag = s.UpdateTag||s.updateTag;
-  if (tag) showUpdateBanner(tag, '');
+  var url = s.UpdateURL||s.updateURL||'';
+  if (tag) showUpdateBanner(tag, url);
 }
 
 function updateDevices(devs) {
@@ -894,8 +1285,11 @@ function updateDevices(devs) {
     } else {
       var div = document.createElement('div');
       div.className = 'device'; div.dataset.ip = ip;
+      var hn = d.hostname || d.Hostname || '';
+      var displayName = hn || ip;
+      var subLine = hn ? ip : 'Aktif bağlantı';
       div.innerHTML = '<div class="dev-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="5" y="2" width="14" height="20" rx="2"/><circle cx="12" cy="18" r="1" fill="currentColor" stroke="none"/></svg></div>'
-        + '<div style="flex:1"><div class="dev-ip">' + ip + '</div><div class="dev-meta">Aktif bağlantı</div></div>'
+        + '<div style="flex:1"><div class="dev-ip">' + displayName + '</div><div class="dev-meta">' + subLine + '</div></div>'
         + '<div class="dev-right"><div class="dev-data">' + fmtB(bytes) + '</div><div class="dev-conns">' + conns + ' bağlantı</div></div>'
         + '<div class="adot"></div>';
       list.prepend(div);
@@ -950,20 +1344,50 @@ function loadSettings(cfg) {
   if (pp) pp.value = cfg.proxy_port||cfg.ProxyPort||8888;
   var pacp = document.getElementById('inp-pac-port');
   if (pacp) pacp.value = cfg.pac_port||cfg.PACPort||8080;
+  var ispSel = document.getElementById('sel-isp');
+  if (ispSel) ispSel.value = cfg.isp||cfg.ISP||'auto';
+  var dnsSel = document.getElementById('sel-dns');
+  if (dnsSel) dnsSel.value = cfg.dns_mode||cfg.DNSMode||'unchanged';
+  var bypassEnabled = !!(cfg.bypass_enabled !== undefined ? cfg.bypass_enabled : (cfg.BypassEnabled !== undefined ? cfg.BypassEnabled : false));
+  var swBypass = document.getElementById('sw-bypass-enabled');
+  if (swBypass) swBypass.checked = bypassEnabled;
+  onBypassToggle(bypassEnabled);
+  var bypassTa = document.getElementById('inp-bypass');
+  if (bypassTa) {
+    var domains = cfg.bypass_domains||cfg.BypassDomains||[];
+    bypassTa.value = Array.isArray(domains) ? domains.join('\n') : (domains||'');
+    updateBypassCount();
+  }
+  var savedTheme = cfg.theme||cfg.Theme;
+  if (savedTheme && savedTheme !== _currentTheme) applyTheme(savedTheme);
 }
 
 var _updateURL = '';
+var _updateDismissed = false;
 function showUpdateBanner(tag, url) {
+  if (_updateDismissed) return;
   _updateURL = url || '';
   var banner = document.getElementById('update-banner');
   var text = document.getElementById('update-text');
+  var btn = document.getElementById('update-btn');
   if (!banner || !text) return;
-  text.textContent = '🟣 Yeni sürüm: ' + tag;
+  text.textContent = 'Yeni sürüm: ' + tag;
+  if (_updateURL) {
+    if (btn) { btn.textContent = 'Güncelle'; btn.style.display = ''; btn.onclick = doUpdate; }
+  } else {
+    if (btn) { btn.textContent = 'İndir'; btn.style.display = ''; btn.onclick = function() { window.goMessage(JSON.stringify({type:'copyToClipboard',payload:{text:'https://github.com/Anilyldrmm/LunaProxy/releases/latest'}})); btn.textContent = '✔ Link kopyalandı'; setTimeout(function(){btn.textContent='İndir';},2000); }; }
+  }
   banner.style.display = 'flex';
 }
 
+function dismissUpdate() {
+  _updateDismissed = true;
+  var banner = document.getElementById('update-banner');
+  if (banner) banner.style.display = 'none';
+}
+
 function doUpdate() {
-  if (!_updateURL) { alert('İndirme URL bulunamadı'); return; }
+  if (!_updateURL) return;
   window.goMessage(JSON.stringify({type:'applyUpdate', payload:{url:_updateURL}}));
 }
 

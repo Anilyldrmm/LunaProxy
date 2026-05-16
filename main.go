@@ -1,10 +1,11 @@
-package main
+﻿package main
 
 import (
 	"context"
 	"fmt"
 	"net/http"
 	"os"
+	"strings"
 	"sync"
 	"time"
 
@@ -20,7 +21,7 @@ func openRunKey(write bool) (registry.Key, error) {
 		`Software\Microsoft\Windows\CurrentVersion\Run`, access)
 }
 
-const appName = "SpAC3DPI"
+const appName = "LunaProxy"
 
 type app struct {
 	mu        sync.Mutex
@@ -39,7 +40,8 @@ var appExiting bool
 
 func main() {
 	if !ensureSingleInstance() {
-		return // başka örnek zaten çalışıyor — sessizce çık
+		bringExistingToFront()
+		return
 	}
 
 	SentinelCheck()
@@ -57,8 +59,11 @@ func main() {
 
 	initTray()
 
-	StartUpdateChecker(func(tag string) {
+	StartUpdateChecker(func(tag, url string) {
 		pendingUpdateTag.Store(tag)
+		pendingUpdateURL.Store(url)
+		showToast("LunaProxy Güncellemesi", "Yeni sürüm mevcut: "+tag+" — uygulamayı açıp güncelleyin")
+		pushStatus()
 	})
 
 	if c.ProxyAutoStart {
@@ -85,6 +90,9 @@ func (a *app) start() error {
 	// HTTP proxy
 	ps, err := startProxy(c.ProxyPort)
 	if err != nil {
+		if strings.Contains(err.Error(), "bind") || strings.Contains(err.Error(), "Only one usage") || strings.Contains(err.Error(), "address already in use") {
+			return fmt.Errorf("Port %d başka bir uygulama tarafından kullanılıyor — Ayarlar → Ağ Portlarından değiştirin", c.ProxyPort)
+		}
 		return fmt.Errorf("proxy başlatılamadı (port %d): %w", c.ProxyPort, err)
 	}
 
@@ -99,6 +107,9 @@ func (a *app) start() error {
 		cs, err := startPAC(a.localIP, c.PACPort)
 		if err != nil {
 			ps.Close()
+			if strings.Contains(err.Error(), "bind") || strings.Contains(err.Error(), "Only one usage") || strings.Contains(err.Error(), "address already in use") {
+				return fmt.Errorf("PAC portu %d kullanımda — Ayarlar → Ağ Portlarından değiştirin", c.PACPort)
+			}
 			return fmt.Errorf("PAC başlatılamadı (port %d): %w", c.PACPort, err)
 		}
 		a.pacSrv = cs
@@ -151,7 +162,7 @@ func (a *app) start() error {
 	watchdog.Stop()
 	watchdog.Start()
 
-	logInfo(fmt.Sprintf("SpAC3DPI başlatıldı | IP:%s Proxy:%d PAC:%d DPIMode:%s ISP:%s DNS:%s DPISrc:%s",
+	logInfo(fmt.Sprintf("LunaProxy başlatıldı | IP:%s Proxy:%d PAC:%d DPIMode:%s ISP:%s DNS:%s DPISrc:%s",
 		a.localIP, c.ProxyPort, c.PACPort, c.DPIMode, c.ISP, c.DNSMode, c.DPISource))
 	return nil
 }
@@ -199,7 +210,7 @@ func (a *app) stop() {
 			defer cancel()
 			proxySrv.Shutdown(ctx)
 		}
-		logInfo("SpAC3DPI durduruldu — PAC sunucusu DIRECT modunda çalışıyor")
+		logInfo("LunaProxy durduruldu — PAC sunucusu DIRECT modunda çalışıyor")
 	}()
 }
 

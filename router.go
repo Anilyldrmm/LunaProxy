@@ -13,6 +13,7 @@ var (
 
 // startRouterHeartbeat — proxy çalıştığı sürece router'a her 10s POST atar.
 // Router heartbeat > 30s gelmezse otomatik DIRECT'e döner.
+// Yeni kurulum /cgi-bin/hb.sh, eski kurulum /hb.sh — hangisi varsa onu kullanır.
 func startRouterHeartbeat(gateway string) {
 	hbMu.Lock()
 	if hbStop != nil {
@@ -22,11 +23,14 @@ func startRouterHeartbeat(gateway string) {
 	hbStop = stop
 	hbMu.Unlock()
 
-	url := "http://" + gateway + ":8090/cgi-bin/hb.sh"
+	urls := []string{
+		"http://" + gateway + ":8090/cgi-bin/hb.sh",
+		"http://" + gateway + ":8090/hb.sh",
+	}
 	client := &http.Client{Timeout: 3 * time.Second}
 
 	go func() {
-		client.Post(url, "text/plain", nil) // ilk heartbeat anında
+		sendHeartbeat(client, urls)
 		ticker := time.NewTicker(10 * time.Second)
 		defer ticker.Stop()
 		for {
@@ -34,10 +38,23 @@ func startRouterHeartbeat(gateway string) {
 			case <-stop:
 				return
 			case <-ticker.C:
-				client.Post(url, "text/plain", nil)
+				sendHeartbeat(client, urls)
 			}
 		}
 	}()
+}
+
+func sendHeartbeat(client *http.Client, urls []string) {
+	for _, url := range urls {
+		resp, err := client.Post(url, "text/plain", nil)
+		if err == nil {
+			ok := resp.StatusCode == 200
+			resp.Body.Close()
+			if ok {
+				return
+			}
+		}
+	}
 }
 
 // stopRouterHeartbeat — heartbeat goroutine'i durdurur.

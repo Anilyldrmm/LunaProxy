@@ -1,4 +1,4 @@
-package main
+﻿package main
 
 import (
 	_ "embed"
@@ -223,7 +223,7 @@ func nrgbaToDIB(img *image.NRGBA) []byte {
 // iconCacheDir — ICO dosyalarının kalıcı olarak saklandığı dizin.
 func iconCacheDir() string {
 	dir, _ := os.UserConfigDir()
-	d := filepath.Join(dir, "SpAC3DPI", "cache")
+	d := filepath.Join(dir, "LunaProxy", "cache")
 	os.MkdirAll(d, 0755)
 	return d
 }

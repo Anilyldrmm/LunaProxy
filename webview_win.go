@@ -1,10 +1,11 @@
-//go:build windows
+﻿//go:build windows
 
 package main
 
 import (
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 	"syscall"
 	"unsafe"
@@ -22,14 +23,24 @@ var (
 	wvProcShowWindow       = wvModUser32.NewProc("ShowWindow")
 	wvProcLoadImage        = wvModUser32.NewProc("LoadImageW")
 
-	wvProcReleaseCapture = wvModUser32.NewProc("ReleaseCapture")
-	wvProcSendMessage    = wvModUser32.NewProc("SendMessageW")
+	wvProcReleaseCapture      = wvModUser32.NewProc("ReleaseCapture")
+	wvProcSendMessage         = wvModUser32.NewProc("SendMessageW")
+	wvProcSetForegroundWindow = wvModUser32.NewProc("SetForegroundWindow")
+	wvProcFindWindowW         = wvModUser32.NewProc("FindWindowW")
+	wvProcBringWindowToTop    = wvModUser32.NewProc("BringWindowToTop")
+	wvProcIsIconic            = wvModUser32.NewProc("IsIconic")
+	wvProcSwitchToThisWindow  = wvModUser32.NewProc("SwitchToThisWindow")
+	wvProcSetWindowLongPtr    = wvModUser32.NewProc("SetWindowLongPtrW")
+	wvProcCallWindowProc      = wvModUser32.NewProc("CallWindowProcW")
 
 	wvModDwmapi            = windows.NewLazySystemDLL("dwmapi.dll")
 	wvProcDwmSetWindowAttr = wvModDwmapi.NewProc("DwmSetWindowAttribute")
 )
 
 const (
+	wvGwlpWndProc = ^uintptr(3) // GWLP_WNDPROC = -4
+	wvWmClose     = uintptr(0x0010)
+
 	wvWsPopup      = uint32(0x80000000)
 	wvWsCaption    = uint32(0x00C00000)
 	wvWsSysMenu    = uint32(0x00080000)
@@ -41,6 +52,7 @@ const (
 	wvSwpNoSize    = uint32(0x0001)
 	wvSwpNoZOrder  = uint32(0x0004)
 	wvSwShow       = uintptr(5)
+	wvSwRestore    = uintptr(9)
 	wvSwHide       = uintptr(0)
 	wvSmCxScreen   = uintptr(0)
 	wvSmCyScreen   = uintptr(1)
@@ -56,16 +68,34 @@ const (
 // wv — global WebView referansı; ipc.go'dan erişilir.
 var wv webview.WebView
 
+// origWndProc — subclass önceki orijinal pencere prosedürü.
+var origWndProc uintptr
+
+// wndProcCallback — WM_CLOSE gelince pencereyi kapatmak yerine gizler (tray'e gönderir).
+// syscall.NewCallback sonucu package-level tutulmalı; GC'ye gitmemeli.
+var wndProcCallback = syscall.NewCallback(func(hwnd, msg, wparam, lparam uintptr) uintptr {
+	if msg == wvWmClose {
+		wvProcShowWindow.Call(hwnd, wvSwHide)
+		return 0
+	}
+	r, _, _ := wvProcCallWindowProc.Call(origWndProc, hwnd, msg, wparam, lparam)
+	return r
+})
+
 // initWindow — WebView2 penceresini oluşturur, frameless yapar ve çalıştırır.
 // Bu fonksiyon main goroutine'de çağrılmalı; bloklar (Run() içerir).
 func initWindow() {
-	wv = webview.New(false)
+	dataPath := filepath.Join(os.Getenv("LOCALAPPDATA"), "LunaProxy", "WebView2")
+	wv = webview.NewWithOptions(webview.WebViewOptions{
+		Debug:    false,
+		DataPath: dataPath,
+	})
 	if wv == nil {
 		panic("WebView2 oluşturulamadı — Edge WebView2 Runtime kurulu mu?")
 	}
 	defer wv.Destroy()
 
-	wv.SetTitle("SpAC3DPI")
+	wv.SetTitle("LunaProxy")
 	wv.SetSize(400, 640, webview.HintFixed)
 
 	hwnd := uintptr(wv.Window())
@@ -74,9 +104,12 @@ func initWindow() {
 	wvApplyDWMShadow(hwnd)
 	wvSetTaskbarIcon(hwnd)
 
-	// Logo inject — sayfa yüklenmeden önce window.__logoB64 hazır olsun
+	// WM_CLOSE subclass — thumbnail X ve Alt+F4 pencereyi kapatmak yerine tray'e gönderir.
+	origWndProc, _, _ = wvProcSetWindowLongPtr.Call(hwnd, wvGwlpWndProc, wndProcCallback)
+
+	// Logo + versiyon inject — sayfa yüklenmeden önce hazır olsun
 	logoB64 := logoBase64()
-	wv.Init(fmt.Sprintf(`window.__logoB64 = "%s";`, logoB64))
+	wv.Init(fmt.Sprintf(`window.__logoB64 = "%s"; window.__version = "%s";`, logoB64, Version))
 
 	// IPC mesaj handler'ı ÖNCE bağla — SetHtml'den önce bağlanmalı
 	wv.Bind("goMessage", handleIPCMessage) //nolint:errcheck
@@ -131,7 +164,7 @@ func wvSetTaskbarIcon(hwnd uintptr) {
 		return
 	}
 
-	f, err := os.CreateTemp("", "spac3dpi_*.ico")
+	f, err := os.CreateTemp("", "lunaproxy_*.ico")
 	if err != nil {
 		return
 	}
@@ -164,13 +197,35 @@ func wvSetTaskbarIcon(hwnd uintptr) {
 	wvProcSendMessage.Call(hwnd, wmSetIcon, 1, hBig)   // ICON_BIG (alt-tab)
 }
 
-// showWindow — pencereyi göster (tray'den çağrılır).
+// showWindow — pencereyi göster ve öne getir (tray'den çağrılır).
+// Minimize ise restore eder; SW_SHOW minimize pencereyi açmaz.
 func showWindow() {
 	if wv == nil {
 		return
 	}
 	hwnd := uintptr(wv.Window())
-	wvProcShowWindow.Call(hwnd, wvSwShow)
+	iconic, _, _ := wvProcIsIconic.Call(hwnd)
+	if iconic != 0 {
+		wvProcShowWindow.Call(hwnd, wvSwRestore)
+	} else {
+		wvProcShowWindow.Call(hwnd, wvSwShow)
+	}
+	wvProcBringWindowToTop.Call(hwnd)
+	wvProcSetForegroundWindow.Call(hwnd)
+}
+
+// bringExistingToFront — başka bir process'ten çalışan örneği öne getirir.
+// SwitchToThisWindow kullanır; SetForegroundWindow cross-process UIPI kısıtlamasını aşar.
+func bringExistingToFront() {
+	title, err := windows.UTF16PtrFromString("LunaProxy")
+	if err != nil {
+		return
+	}
+	hwnd, _, _ := wvProcFindWindowW.Call(0, uintptr(unsafe.Pointer(title)))
+	if hwnd == 0 {
+		return
+	}
+	wvProcSwitchToThisWindow.Call(hwnd, 1) // fAltTab=true → focus + öne getir
 }
 
 // hideWindow — pencereyi gizle (tray'e minimize).

@@ -1,9 +1,10 @@
-package main
+﻿package main
 
 import (
 	"fmt"
 	"net"
 	"net/http"
+	"strings"
 	"sync"
 	"time"
 
@@ -20,13 +21,33 @@ var (
 )
 
 // setPACRunning — proxy açıkken PAC'ı proxy+DIRECT moduna alır.
+// BypassEnabled=true ve BypassDomains doluysa sadece o domain'ler proxy'den geçer;
+// aksi takdirde tüm trafik proxy'den geçer.
 func setPACRunning(localIP string, proxyPort int) {
+	c := getConfig()
+	proxy := fmt.Sprintf(`"PROXY %s:%d; DIRECT"`, localIP, proxyPort)
+	var body string
+	if !c.BypassEnabled || len(c.BypassDomains) == 0 {
+		body = fmt.Sprintf(`function FindProxyForURL(url,host){return %s;}`, proxy)
+	} else {
+		var sb strings.Builder
+		sb.WriteString(`function FindProxyForURL(url,host){`)
+		for _, d := range c.BypassDomains {
+			d = strings.TrimSpace(d)
+			if d == "" {
+				continue
+			}
+			sb.WriteString(fmt.Sprintf(`if(dnsDomainIs(host,%q)||host===%q)return %s;`, d, d, proxy))
+		}
+		sb.WriteString(`return "DIRECT";}`)
+		body = sb.String()
+	}
 	pacMu.Lock()
-	pacBody = fmt.Sprintf(
-		`function FindProxyForURL(url,host){return "PROXY %s:%d; DIRECT";}`,
-		localIP, proxyPort,
-	)
+	pacBody = body
 	pacMu.Unlock()
+
+	gw := guessGatewayIP(localIP)
+	go pushRouterPACBody(gw, body)
 }
 
 // setPACDirect — proxy kapalıyken PAC'ı DIRECT moduna alır.
@@ -51,26 +72,53 @@ func startPAC(localIP string, port int) (*http.Server, error) {
 	return srv, nil
 }
 
-// pushRouterPAC — PC→Router HTTP CGI ile PAC durumunu günceller.
-// Proxy modunda IP ve port da gönderilir; router PAC'ı dinamik yazar.
-// Router erişilemezse sessizce geçer.
-func pushRouterPAC(localIP, mode string, proxyPort int) {
-	gateway := guessGatewayIP(localIP)
-	var url string
-	if mode == "proxy" {
-		url = fmt.Sprintf("http://%s:8090/cgi-bin/update.sh?mode=proxy&ip=%s&port=%d", gateway, localIP, proxyPort)
-	} else {
-		url = fmt.Sprintf("http://%s:8090/cgi-bin/update.sh?mode=direct", gateway)
+// pushRouterPACBody — router'daki update_pac.sh'e PAC JavaScript içeriğini POST eder.
+// Router kurulumu yoksa sessizce başarısız olur.
+func pushRouterPACBody(gateway, body string) {
+	if gateway == "" {
+		return
 	}
 	client := &http.Client{Timeout: 5 * time.Second}
-	for i := 0; i < 3; i++ {
-		resp, err := client.Get(url)
+	for _, path := range []string{"/cgi-bin/update_pac.sh", "/update_pac.sh"} {
+		url := fmt.Sprintf("http://%s:8090%s", gateway, path)
+		resp, err := client.Post(url, "text/plain", strings.NewReader(body))
 		if err == nil {
+			ok := resp.StatusCode == 200
 			resp.Body.Close()
-			return
+			if ok {
+				return
+			}
 		}
-		if i < 2 {
-			time.Sleep(2 * time.Second)
+	}
+}
+
+// pushRouterPAC — PC→Router HTTP CGI ile PAC durumunu günceller.
+// Proxy modunda IP ve port da gönderilir; router PAC'ı dinamik yazar.
+// Yeni kurulum /cgi-bin/update.sh, eski kurulum /update.sh — her ikisini dener.
+func pushRouterPAC(localIP, mode string, proxyPort int) {
+	gateway := guessGatewayIP(localIP)
+	var query string
+	if mode == "proxy" {
+		query = fmt.Sprintf("mode=proxy&ip=%s&port=%d", localIP, proxyPort)
+	} else {
+		query = "mode=direct"
+	}
+	client := &http.Client{Timeout: 5 * time.Second}
+	for _, path := range []string{"/cgi-bin/update.sh", "/update.sh"} {
+		url := fmt.Sprintf("http://%s:8090%s?%s", gateway, path, query)
+		for i := 0; i < 3; i++ {
+			resp, err := client.Get(url)
+			if err == nil {
+				ok := resp.StatusCode == 200
+				resp.Body.Close()
+				if ok {
+					return
+				}
+				break // 404 gibi hata — bu path'ı deneme, sonrakine geç
+			}
+			if i < 2 {
+				time.Sleep(2 * time.Second)
+			}
 		}
 	}
 }
@@ -83,9 +131,9 @@ func buildPACMux(localIP string, port int) *http.ServeMux {
 		body := pacBody
 		pacMu.RUnlock()
 		w.Header().Set("Content-Type", "application/x-ns-proxy-autoconfig")
-		// no-cache: iOS PAC'ı önbelleğe almasın; proxy kapanınca DIRECT'i hemen görsün.
-		w.Header().Set("Cache-Control", "no-store, no-cache, must-revalidate")
-		w.Header().Set("Pragma", "no-cache")
+		// 60s cache: mobil PAC server çöktüğünde eski cache'i kullanır.
+		// PROXY;DIRECT döndüğü için proxy erişilemeyince DIRECT'e geçer.
+		w.Header().Set("Cache-Control", "max-age=60")
 		fmt.Fprint(w, body)
 	}
 
@@ -107,7 +155,8 @@ func buildPACMux(localIP string, port int) *http.ServeMux {
 	setupURL := fmt.Sprintf("http://%s:%d/setup", localIP, port)
 	_ = setupURL
 
-	routerPACURL := fmt.Sprintf("http://%s:8090/cgi-bin/proxy.pac", guessGatewayIP(localIP))
+	gw := guessGatewayIP(localIP)
+	routerPACURL := fmt.Sprintf("http://%s:8090%s", gw, probeRouterPACPath(gw))
 
 	mux.HandleFunc("/setup", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
@@ -125,7 +174,7 @@ func buildPACMux(localIP string, port int) *http.ServeMux {
 const setupPageHTML = `<!DOCTYPE html>
 <html lang="tr"><head><meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>SpAC3DPI Kurulum</title>
+<title>LunaProxy Kurulum</title>
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
 body{font-family:system-ui,sans-serif;background:#0D0B14;color:#F1F0F5;min-height:100vh;
@@ -151,7 +200,7 @@ h1{font-size:20px;font-weight:700;margin-bottom:4px}
 hr{border:none;border-top:1px solid #2A2240;margin:16px 0}
 </style></head>
 <body><div class="card">
-<h1>SpAC3DPI Kurulum</h1>
+<h1>LunaProxy Kurulum</h1>
 <p class="sub">Proxy ayari icin asagidaki URL'yi kopyalayin.</p>
 <div class="badge">ONERILEN — Router (her zaman erisebilir)</div>
 <div class="url-box" id="rurl">%s</div>
@@ -175,11 +224,10 @@ hr{border:none;border-top:1px solid #2A2240;margin:16px 0}
 <script>
 function cp(id,btn){
   var url=document.getElementById(id).textContent.trim();
-  navigator.clipboard.writeText(url).then(function(){
-    var b=document.getElementById(btn);
-    var orig=b.textContent;
-    b.textContent='Kopyalandi';b.classList.add('copied');
-    setTimeout(function(){b.textContent=orig;b.classList.remove('copied');},2000);
-  });
+  var b=document.getElementById(btn);
+  var orig=b.textContent;
+  function ok(){b.textContent='Kopyalandi';b.classList.add('copied');setTimeout(function(){b.textContent=orig;b.classList.remove('copied');},2000);}
+  function fallback(){var ta=document.createElement('textarea');ta.value=url;document.body.appendChild(ta);ta.select();try{document.execCommand('copy');ok();}catch(e){}document.body.removeChild(ta);}
+  if(navigator.clipboard){navigator.clipboard.writeText(url).then(ok).catch(fallback);}else{fallback();}
 }
 </script></body></html>`

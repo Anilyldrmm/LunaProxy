@@ -1,4 +1,4 @@
-//go:build windows
+﻿//go:build windows
 
 package main
 
@@ -29,11 +29,14 @@ type RouterStep struct {
 
 const routerLighttpdConf = `server.document-root = "/opt/share/pac"
 server.port = 8090
-server.pid-file = "/tmp/spac3dpi_lighttpd.pid"
-server.errorlog = "/tmp/spac3dpi_lighttpd.log"
+server.pid-file = "/tmp/lunaproxy_lighttpd.pid"
+server.errorlog = "/tmp/lunaproxy_lighttpd.log"
 server.modules = ("mod_cgi", "mod_accesslog")
 accesslog.filename = "/dev/null"
 cgi.assign = (".sh" => "/opt/bin/sh", ".pac" => "/opt/bin/sh")
+$HTTP["url"] == "/pac" {
+  cgi.assign = ("" => "/opt/bin/sh")
+}
 mimetype.assign = (
   ".pac" => "application/x-ns-proxy-autoconfig",
   ".dat" => "application/x-ns-proxy-autoconfig"
@@ -44,24 +47,38 @@ const routerProxyPac = `#!/bin/sh
 PATH=/opt/bin:/opt/sbin:/bin:/sbin:/usr/bin:/usr/sbin
 printf 'Content-Type: application/x-ns-proxy-autoconfig\r\nCache-Control: no-store,no-cache\r\n\r\n'
 NOW=$(date +%s)
-HB=/tmp/spac3dpi_hb
-PX=/tmp/spac3dpi_proxy
-if [ -f "$HB" ] && [ -f "$PX" ]; then
+HB=/tmp/lunaproxy_hb
+PAC_JS=/tmp/lunaproxy_pac_js
+if [ -f "$HB" ]; then
   HB_T=$(cat "$HB" 2>/dev/null)
   DIFF=$((NOW - HB_T))
   if [ "$DIFF" -lt 30 ]; then
-    ADDR=$(cat "$PX" 2>/dev/null)
-    printf 'function FindProxyForURL(url,host){return "PROXY %s; DIRECT";}\n' "$ADDR"
-    exit 0
+    if [ -f "$PAC_JS" ]; then
+      cat "$PAC_JS"
+      exit 0
+    fi
+    PX=/tmp/lunaproxy_proxy
+    if [ -f "$PX" ]; then
+      ADDR=$(cat "$PX" 2>/dev/null)
+      printf 'function FindProxyForURL(url,host){return "PROXY %s; DIRECT";}\n' "$ADDR"
+      exit 0
+    fi
   fi
 fi
 printf 'function FindProxyForURL(url,host){return "DIRECT";}\n'
 `
 
+const routerUpdatePacSh = `#!/bin/sh
+PATH=/opt/bin:/opt/sbin:/bin:/sbin:/usr/bin:/usr/sbin
+printf 'Content-Type: text/plain\r\n\r\n'
+cat > /tmp/lunaproxy_pac_js
+printf 'ok\n'
+`
+
 const routerHbSh = `#!/bin/sh
 PATH=/opt/bin:/opt/sbin:/bin:/sbin:/usr/bin:/usr/sbin
 printf 'Content-Type: text/plain\r\n\r\n'
-date +%s > /tmp/spac3dpi_hb
+date +%s > /tmp/lunaproxy_hb
 printf 'ok\n'
 `
 
@@ -72,10 +89,10 @@ MODE=$(echo "$QUERY_STRING" | sed 's/.*mode=//;s/&.*//')
 IP=$(echo "$QUERY_STRING" | sed 's/.*ip=//;s/&.*//')
 PORT=$(echo "$QUERY_STRING" | sed 's/.*port=//;s/&.*//')
 if [ "$MODE" = "proxy" ] && [ -n "$IP" ] && [ -n "$PORT" ]; then
-  printf '%s:%s' "$IP" "$PORT" > /tmp/spac3dpi_proxy
-  date +%s > /tmp/spac3dpi_hb
+  printf '%s:%s' "$IP" "$PORT" > /tmp/lunaproxy_proxy
+  date +%s > /tmp/lunaproxy_hb
 else
-  rm -f /tmp/spac3dpi_proxy
+  rm -f /tmp/lunaproxy_proxy
 fi
 printf 'ok\n'
 `
@@ -85,16 +102,16 @@ START=80
 STOP=20
 USE_PROCD=0
 start() {
-  if [ -f /tmp/spac3dpi_lighttpd.pid ]; then
-    kill "$(cat /tmp/spac3dpi_lighttpd.pid)" 2>/dev/null
-    rm -f /tmp/spac3dpi_lighttpd.pid
+  if [ -f /tmp/lunaproxy_lighttpd.pid ]; then
+    kill "$(cat /tmp/lunaproxy_lighttpd.pid)" 2>/dev/null
+    rm -f /tmp/lunaproxy_lighttpd.pid
   fi
   /opt/bin/lighttpd -f /opt/share/pac/lighttpd.conf
 }
 stop() {
-  if [ -f /tmp/spac3dpi_lighttpd.pid ]; then
-    kill "$(cat /tmp/spac3dpi_lighttpd.pid)" 2>/dev/null
-    rm -f /tmp/spac3dpi_lighttpd.pid
+  if [ -f /tmp/lunaproxy_lighttpd.pid ]; then
+    kill "$(cat /tmp/lunaproxy_lighttpd.pid)" 2>/dev/null
+    rm -f /tmp/lunaproxy_lighttpd.pid
   fi
 }
 `
@@ -127,13 +144,18 @@ func shQuote(s string) string {
 	return "'" + strings.ReplaceAll(s, "'", `'\''`) + "'"
 }
 
-// sshExec — sudo gerekiyorsa 'sudo sh -c <cmd>' ile çalıştırır.
-// sudo sh -c kullanmak, sudo'nun secure_path kısıtlamasını aşar.
+// sshPath — router SSH exec oturumlarında minimal PATH sorununu önler.
+// Bazı firmware'lerde exec komutu login shell PATH'ini taşımaz; explicit set gerekir.
+const sshPath = "PATH=/opt/bin:/opt/sbin:/bin:/sbin:/usr/bin:/usr/sbin"
+
+// sshExec — her zaman sh -c + explicit PATH ile çalıştırır.
+// sudo gerekiyorsa 'sudo sh -c ...' wrapper'ı kullanır (secure_path aşılır).
 func sshExec(client *ssh.Client, cmd, sudo string) (string, error) {
+	full := sshPath + "; " + cmd
 	if sudo == "" {
-		return sshRun(client, cmd)
+		return sshRun(client, "sh -c "+shQuote(full))
 	}
-	return sshRun(client, "sudo sh -c "+shQuote(cmd))
+	return sshRun(client, "sudo sh -c "+shQuote(full))
 }
 
 // sshWriteFile — dosyayı stdin→cat/tee ile router'a yazar.
@@ -145,10 +167,36 @@ func sshWriteFile(client *ssh.Client, path, content, sudo string) error {
 	defer session.Close()
 	session.Stdin = strings.NewReader(content)
 	if sudo == "" {
-		return session.Run("cat > " + shQuote(path))
+		return session.Run("sh -c " + shQuote(sshPath+"; cat > "+shQuote(path)))
 	}
-	// sudo sh -c 'tee /path > /dev/null' — secure_path sorununu aşar
-	return session.Run("sudo sh -c " + shQuote("tee "+shQuote(path)+" > /dev/null"))
+	return session.Run("sudo sh -c " + shQuote(sshPath+"; tee "+shQuote(path)+" > /dev/null"))
+}
+
+// ── Keenetic NDM yardımcıları ────────────────────────────────────────────────
+
+// isKeenetic — SSH exec'te "show version" ile Keenetic firmware tespiti yapar.
+func isKeenetic(client *ssh.Client) bool {
+	out, _ := sshRun(client, "show version")
+	clean := strings.ReplaceAll(out, "\x1b[K", "")
+	return strings.Contains(clean, "Keenetic")
+}
+
+// sshExecNDM — Keenetic NDM CLI için 'exec <cmd>' wrapper.
+// Keenetic SSH exec'inde sh -c çalışmaz; NDM'nin kendi exec komutu kullanılır.
+func sshExecNDM(client *ssh.Client, cmd string) (string, error) {
+	return sshRun(client, "exec "+cmd)
+}
+
+// sshWriteNDM — Keenetic'te dosya yazmak için 'exec tee <path>' + stdin kullanır.
+// Shell redirection yok; NDM exec tee komutunu destekler.
+func sshWriteNDM(client *ssh.Client, path, content string) error {
+	session, err := client.NewSession()
+	if err != nil {
+		return err
+	}
+	defer session.Close()
+	session.Stdin = strings.NewReader(content)
+	return session.Run("exec tee " + path)
 }
 
 // ── Tespit fonksiyonları ─────────────────────────────────────────────────────
@@ -228,6 +276,82 @@ func getSudoPrefix(client *ssh.Client) string {
 	return "sudo "
 }
 
+// ── Keenetic kurulum fonksiyonu ─────────────────────────────────────────────
+
+// routerInstallKeenetic — Keenetic NDM CLI üzerinden kurulum yapar.
+// 'exec <cmd>' ve 'exec tee <path>' ile shell syntax kullanmadan dosya yazar.
+// Entware + lighttpd zaten kurulu varsayılır; scriptleri günceller ve lighttpd başlatır.
+func routerInstallKeenetic(client *ssh.Client, cfg RouterSetupCfg, progress func(RouterStep)) error {
+	progress(RouterStep{"Keenetic firmware tespit edildi", "ok"})
+
+	pacDir := "/opt/share/pac"
+
+	// Entware kurulu mu?
+	out, _ := sshExecNDM(client, "ls /opt/bin/sh 2>/dev/null")
+	if !strings.Contains(out, "sh") {
+		return fmt.Errorf("Entware kurulu değil — /opt/bin/sh bulunamadı")
+	}
+	progress(RouterStep{"Entware mevcut", "ok"})
+
+	// Dizin oluştur
+	if _, err := sshExecNDM(client, "mkdir -p "+pacDir); err != nil {
+		return fmt.Errorf("dizin oluşturulamadı: %w", err)
+	}
+
+	// Scriptleri yaz
+	progress(RouterStep{"Scriptler yazılıyor...", "info"})
+	scripts := []struct {
+		path    string
+		content string
+	}{
+		{pacDir + "/pac", routerProxyPac},
+		{pacDir + "/proxy.pac", routerProxyPac},
+		{pacDir + "/update.sh", routerUpdateSh},
+		{pacDir + "/update_pac.sh", routerUpdatePacSh},
+		{pacDir + "/hb.sh", routerHbSh},
+		{pacDir + "/lighttpd.conf", routerLighttpdConf},
+	}
+	for _, s := range scripts {
+		if err := sshWriteNDM(client, s.path, s.content); err != nil {
+			return fmt.Errorf("%s yazılamadı: %w", s.path, err)
+		}
+		sshExecNDM(client, "chmod +x "+s.path) //nolint:errcheck
+	}
+	progress(RouterStep{"Scriptler yazıldı", "ok"})
+
+	// lighttpd'yi başlat ya da yeniden başlat
+	sshExecNDM(client, "kill $(cat /tmp/lunaproxy_lighttpd.pid 2>/dev/null) 2>/dev/null") //nolint:errcheck
+	time.Sleep(300 * time.Millisecond)
+
+	lighttpdBin := "/opt/bin/lighttpd"
+	if _, err := sshExecNDM(client, lighttpdBin+" -f "+pacDir+"/lighttpd.conf"); err != nil {
+		// init.d üzerinden dene
+		sshExecNDM(client, "/opt/etc/init.d/S80lighttpd start") //nolint:errcheck
+	}
+	progress(RouterStep{"lighttpd başlatıldı (port 8090)", "ok"})
+
+	time.Sleep(800 * time.Millisecond)
+	testURL := fmt.Sprintf("http://%s:8090/pac", cfg.Host)
+	resp, err := (&http.Client{Timeout: 5 * time.Second}).Get(testURL)
+	if err != nil || resp.StatusCode != 200 {
+		if resp != nil {
+			resp.Body.Close()
+		}
+		// /proxy.pac'ı da dene
+		testURL = fmt.Sprintf("http://%s:8090/proxy.pac", cfg.Host)
+		resp, err = (&http.Client{Timeout: 5 * time.Second}).Get(testURL)
+	}
+	if err != nil {
+		return fmt.Errorf("kurulum doğrulanamadı: %s erişilemiyor", testURL)
+	}
+	resp.Body.Close()
+	if resp.StatusCode != 200 {
+		return fmt.Errorf("PAC HTTP %d döndü", resp.StatusCode)
+	}
+	progress(RouterStep{fmt.Sprintf("Doğrulandı — %s erişilebilir", testURL), "ok"})
+	return nil
+}
+
 // ── Ana kurulum fonksiyonu ───────────────────────────────────────────────────
 
 // RouterInstall — SSH üzerinden router'a PAC+heartbeat scriptlerini kurar.
@@ -242,6 +366,11 @@ func RouterInstall(cfg RouterSetupCfg, progress func(RouterStep)) error {
 	defer client.Close()
 	progress(RouterStep{"SSH bağlantısı kuruldu", "ok"})
 
+	// Keenetic firmware tespiti — NDM CLI farklı kurulum yolu gerektirir
+	if isKeenetic(client) {
+		return routerInstallKeenetic(client, cfg, progress)
+	}
+
 	// Yetki kontrolü — root değilse sudo prefix kullan
 	sudo := getSudoPrefix(client)
 	if sudo != "" {
@@ -255,38 +384,46 @@ func RouterInstall(cfg RouterSetupCfg, progress func(RouterStep)) error {
 	}
 
 	// HTTP sunucu seçimi — öncelik: lighttpd > httpd > busybox httpd > python
+	entware := hasEntware(client)
 	useLighttpd := false
-	httpdBin := ""    // system httpd veya "busybox httpd"
-	pythonBin := ""   // "python3" veya "python"
-	pythonMod := ""   // "http.server --cgi" veya "CGIHTTPServer"
+	httpdBin := ""  // system httpd veya "busybox httpd"
+	pythonBin := "" // "python3" veya "python"
+	pythonMod := "" // "http.server --cgi" veya "CGIHTTPServer"
 
 	if hasLighttpd(client) {
 		useLighttpd = true
 		progress(RouterStep{"lighttpd mevcut", "ok"})
-	} else if hasEntware(client) {
+	} else if entware {
 		progress(RouterStep{"lighttpd kuruluyor (opkg)...", "info"})
 		if out, err := sshRun(client, "opkg update && opkg install lighttpd"); err != nil {
-			return fmt.Errorf("lighttpd kurulamadı: %s", out)
+			// ISP opkg repolarını engelliyor olabilir — alternatif HTTP sunucu ara
+			progress(RouterStep{"opkg erişilemiyor, alternatif HTTP sunucu aranıyor...", "info"})
+			logWarn("opkg hata: " + strings.TrimSpace(out))
+		} else {
+			useLighttpd = true
+			progress(RouterStep{"lighttpd kuruldu", "ok"})
 		}
-		useLighttpd = true
-		progress(RouterStep{"lighttpd kuruldu", "ok"})
-	} else if bin, ok := findHTTPD(client); ok {
-		httpdBin = bin
-		progress(RouterStep{"httpd tespit edildi: " + bin, "info"})
-	} else if hasBusyboxHTTPD(client) {
-		httpdBin = "busybox httpd"
-		progress(RouterStep{"BusyBox httpd kullanılacak", "info"})
-	} else if pb, pm, ok := findPython(client); ok {
-		pythonBin = pb
-		pythonMod = pm
-		progress(RouterStep{"Python CGI sunucu kullanılacak (" + pb + ")", "info"})
-	} else {
-		return fmt.Errorf("HTTP sunucu bulunamadı — lighttpd, httpd, BusyBox veya Python gerekli")
+	}
+
+	if !useLighttpd {
+		if bin, ok := findHTTPD(client); ok {
+			httpdBin = bin
+			progress(RouterStep{"httpd tespit edildi: " + bin, "info"})
+		} else if hasBusyboxHTTPD(client) {
+			httpdBin = "busybox httpd"
+			progress(RouterStep{"BusyBox httpd kullanılacak", "info"})
+		} else if pb, pm, ok := findPython(client); ok {
+			pythonBin = pb
+			pythonMod = pm
+			progress(RouterStep{"Python CGI sunucu kullanılacak (" + pb + ")", "info"})
+		} else {
+			return fmt.Errorf("HTTP sunucu bulunamadı — lighttpd, httpd, BusyBox veya Python gerekli")
+		}
 	}
 
 	// Dizin yapısı: lighttpd→/opt/share/pac, diğerleri→/tmp/pac
 	pacDir := "/opt/share/pac"
-	if !hasEntware(client) {
+	if !entware {
 		pacDir = "/tmp/pac"
 	}
 	cgiDir := pacDir + "/cgi-bin"
@@ -297,14 +434,17 @@ func RouterInstall(cfg RouterSetupCfg, progress func(RouterStep)) error {
 	}
 
 	// CGI scriptleri cgi-bin/ altına yaz (lighttpd ext-match + BusyBox cgi-bin kuralı)
+	// /pac dosyası doc-root'a yazılır; lighttpd koşullu cgi.assign ile /pac URL'sini çalıştırır.
 	files := []struct {
 		path    string
 		content string
 		exec    bool
 	}{
+		{pacDir + "/pac", routerProxyPac, true},
 		{cgiDir + "/proxy.pac", routerProxyPac, true},
 		{cgiDir + "/hb.sh", routerHbSh, true},
 		{cgiDir + "/update.sh", routerUpdateSh, true},
+		{cgiDir + "/update_pac.sh", routerUpdatePacSh, true},
 	}
 	if useLighttpd {
 		files = append(files, struct {
@@ -318,7 +458,7 @@ func RouterInstall(cfg RouterSetupCfg, progress func(RouterStep)) error {
 			path    string
 			content string
 			exec    bool
-		}{"/opt/etc/init.d/S80spac3dpi", routerInitScript, true})
+		}{"/opt/etc/init.d/S80lunaproxy", routerInitScript, true})
 	}
 	for _, f := range files {
 		if err := sshWriteFile(client, f.path, f.content, sudo); err != nil {
@@ -341,7 +481,7 @@ func RouterInstall(cfg RouterSetupCfg, progress func(RouterStep)) error {
 		if out, _ := sshRun(client, "which lighttpd 2>/dev/null"); out != "" {
 			lighttpdBin = out
 		}
-		sshExec(client, `if [ -f /tmp/spac3dpi_lighttpd.pid ]; then kill $(cat /tmp/spac3dpi_lighttpd.pid) 2>/dev/null; sleep 1; fi`, sudo) //nolint:errcheck
+		sshExec(client, `if [ -f /tmp/lunaproxy_lighttpd.pid ]; then kill $(cat /tmp/lunaproxy_lighttpd.pid) 2>/dev/null; sleep 1; fi`, sudo) //nolint:errcheck
 		if out, err := sshExec(client, lighttpdBin+" -f "+shQuote(pacDir+"/lighttpd.conf"), sudo); err != nil {
 			return fmt.Errorf("lighttpd başlatılamadı: %s", out)
 		}
@@ -367,14 +507,14 @@ func RouterInstall(cfg RouterSetupCfg, progress func(RouterStep)) error {
 	}
 
 	time.Sleep(800 * time.Millisecond)
-	testURL := fmt.Sprintf("http://%s:8090/cgi-bin/proxy.pac", cfg.Host)
+	testURL := fmt.Sprintf("http://%s:8090/pac", cfg.Host)
 	resp, err := (&http.Client{Timeout: 5 * time.Second}).Get(testURL)
 	if err != nil {
 		return fmt.Errorf("kurulum doğrulanamadı: %s erişilemiyor", testURL)
 	}
 	resp.Body.Close()
 	if resp.StatusCode != 200 {
-		return fmt.Errorf("proxy.pac HTTP %d döndü", resp.StatusCode)
+		return fmt.Errorf("/pac HTTP %d döndü", resp.StatusCode)
 	}
 	progress(RouterStep{fmt.Sprintf("Doğrulandı — %s erişilebilir", testURL), "ok"})
 
@@ -382,15 +522,17 @@ func RouterInstall(cfg RouterSetupCfg, progress func(RouterStep)) error {
 }
 
 // RouterTest — önceden kurulu bir router'ın PAC endpoint'ini test eder.
+// /pac ve /proxy.pac sırasıyla denenir (Keenetic uyumluluğu için).
 func RouterTest(host string) error {
-	url := fmt.Sprintf("http://%s:8090/cgi-bin/proxy.pac", host)
-	resp, err := (&http.Client{Timeout: 5 * time.Second}).Get(url)
-	if err != nil {
-		return fmt.Errorf("%s erişilemiyor", url)
+	c := &http.Client{Timeout: 5 * time.Second}
+	for _, path := range []string{"/pac", "/proxy.pac"} {
+		resp, err := c.Get(fmt.Sprintf("http://%s:8090%s", host, path))
+		if err == nil {
+			resp.Body.Close()
+			if resp.StatusCode == 200 {
+				return nil
+			}
+		}
 	}
-	defer resp.Body.Close()
-	if resp.StatusCode != 200 {
-		return fmt.Errorf("HTTP %d", resp.StatusCode)
-	}
-	return nil
+	return fmt.Errorf("http://%s:8090 PAC endpoint erişilemiyor", host)
 }

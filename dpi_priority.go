@@ -1,4 +1,4 @@
-package main
+﻿package main
 
 import (
 	"fmt"
@@ -108,7 +108,7 @@ func cachedGDPIPath() string {
 	if err != nil {
 		return ""
 	}
-	p := filepath.Join(dir, "SpAC3DPI", "bin", "goodbyedpi.exe")
+	p := filepath.Join(dir, "LunaProxy", "bin", "goodbyedpi.exe")
 	if _, err := os.Stat(p); err == nil {
 		return p
 	}

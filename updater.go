@@ -1,4 +1,4 @@
-package main
+﻿package main
 
 import (
 	"encoding/json"
@@ -6,12 +6,13 @@ import (
 	"io"
 	"net/http"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strconv"
 	"strings"
-	"syscall"
 	"time"
+	"unsafe"
+
+	"golang.org/x/sys/windows"
 )
 
 type ghRelease struct {
@@ -75,24 +76,30 @@ func CheckUpdate() (tagName, downloadURL string, err error) {
 		return "", "", nil
 	}
 	for _, a := range rel.Assets {
-		if strings.EqualFold(a.Name, "SpAC3DPI.exe") {
+		name := strings.ToLower(a.Name)
+		if strings.HasSuffix(name, ".exe") {
 			return rel.TagName, a.BrowserDownloadURL, nil
 		}
 	}
 	return rel.TagName, "", nil
 }
 
-// DownloadAndReplace — yeni exe'yi indirir, PS1 replace script çalıştırır, çıkar.
+// DownloadAndReplace — güncelleme dosyasını indirir ve uygular.
+// Setup installer ise /VERYSILENT ile çalıştırır.
+// Raw exe ise PS1 replace script ile mevcut exe'yi değiştirir.
 func DownloadAndReplace(downloadURL string) error {
 	tmpDir := os.TempDir()
-	newExe := filepath.Join(tmpDir, "SpAC3DPI_update.exe")
+
+	// URL'den dosya adını çıkar
+	urlBase := downloadURL[strings.LastIndex(downloadURL, "/")+1:]
+	tmpFile := filepath.Join(tmpDir, urlBase)
 
 	resp, err := http.Get(downloadURL)
 	if err != nil {
 		return fmt.Errorf("indirme hatası: %w", err)
 	}
 	defer resp.Body.Close()
-	f, err := os.Create(newExe)
+	f, err := os.Create(tmpFile)
 	if err != nil {
 		return err
 	}
@@ -102,43 +109,92 @@ func DownloadAndReplace(downloadURL string) error {
 	}
 	f.Close()
 
+	shell32 := windows.NewLazySystemDLL("shell32.dll")
+	shellExecW := shell32.NewProc("ShellExecuteW")
+	op, _ := windows.UTF16PtrFromString("open")
+
+	isSetup := strings.Contains(strings.ToLower(urlBase), "setup")
+
+	if isSetup {
+		// Installer'ı doğrudan ShellExecuteW ile başlat.
+		// requireAdministrator manifest'i UAC'ı otomatik tetikler — PS1 wrapper gereksiz.
+		// Installer /VERYSILENT modunda [Run] Check:WizardSilent entry'si ile uygulamayı yeniden başlatır.
+		exePtr, _ := windows.UTF16PtrFromString(tmpFile)
+		argsPtr, _ := windows.UTF16PtrFromString("/VERYSILENT /NORESTART /CLOSEAPPLICATIONS")
+		r, _, _ := shellExecW.Call(
+			0,
+			uintptr(unsafe.Pointer(op)),
+			uintptr(unsafe.Pointer(exePtr)),
+			uintptr(unsafe.Pointer(argsPtr)),
+			0,
+			1,
+		)
+		if r <= 32 {
+			return fmt.Errorf("installer başlatılamadı (ShellExecute: %d)", r)
+		}
+		os.Exit(0)
+		return nil
+	}
+
+	// Raw exe: PS1 replace script ile değiştir ve yeniden başlat.
 	selfExe, err := os.Executable()
 	if err != nil {
 		return err
 	}
-
-	ps1 := filepath.Join(tmpDir, "SpAC3DPI_update.ps1")
-	script := fmt.Sprintf(`Start-Sleep -Seconds 2
-Copy-Item -Force "%s" "%s"
-Start-Process "%s"
-Remove-Item "%s" -ErrorAction SilentlyContinue
-`, newExe, selfExe, selfExe, ps1)
+	ps1 := filepath.Join(tmpDir, "LunaProxy_update.ps1")
+	const utf8BOM = "\xEF\xBB\xBF"
+	script := utf8BOM + fmt.Sprintf(`$src = '%s'
+$dst = '%s'
+$ps1path = '%s'
+Start-Sleep -Seconds 2
+$ok = $false
+for ($i = 0; $i -lt 10; $i++) {
+    try {
+        Copy-Item -Force $src $dst -ErrorAction Stop
+        $ok = $true
+        break
+    } catch {
+        Start-Sleep -Seconds 1
+    }
+}
+if ($ok) {
+    Start-Process -FilePath $dst
+}
+Remove-Item $ps1path -ErrorAction SilentlyContinue
+`, tmpFile, selfExe, ps1)
 	if err := os.WriteFile(ps1, []byte(script), 0644); err != nil {
 		return err
 	}
-
-	cmd := exec.Command("powershell.exe", "-WindowStyle", "Hidden", "-ExecutionPolicy", "Bypass", "-File", ps1)
-	cmd.SysProcAttr = &syscall.SysProcAttr{HideWindow: true, CreationFlags: 0x08000000}
-	if err := cmd.Start(); err != nil {
-		return fmt.Errorf("güncelleme script başlatılamadı: %w", err)
+	exe, _ := windows.UTF16PtrFromString("powershell.exe")
+	args, _ := windows.UTF16PtrFromString("-ExecutionPolicy Bypass -WindowStyle Hidden -File " + ps1)
+	r, _, _ := shellExecW.Call(
+		0,
+		uintptr(unsafe.Pointer(op)),
+		uintptr(unsafe.Pointer(exe)),
+		uintptr(unsafe.Pointer(args)),
+		0,
+		1,
+	)
+	if r <= 32 {
+		return fmt.Errorf("güncelleme script başlatılamadı (ShellExecute: %d)", r)
 	}
 	os.Exit(0)
 	return nil
 }
 
 // StartUpdateChecker — arka planda her 6 saatte bir güncelleme kontrol eder.
-// Güncelleme bulunursa onNotify(tagName) çağrılır.
-func StartUpdateChecker(onNotify func(tagName string)) {
+// Güncelleme bulunursa onNotify(tagName, downloadURL) çağrılır.
+func StartUpdateChecker(onNotify func(tagName, downloadURL string)) {
 	go func() {
 		check := func() {
-			tag, _, err := CheckUpdate()
+			tag, url, err := CheckUpdate()
 			if err != nil {
 				logWarn("Güncelleme kontrolü başarısız: " + err.Error())
 				return
 			}
 			if tag != "" {
 				logInfo("Yeni sürüm mevcut: " + tag)
-				onNotify(tag)
+				onNotify(tag, url)
 			}
 		}
 		check()

@@ -1,4 +1,4 @@
-//go:build withbundle
+﻿//go:build withbundle
 
 package main
 
@@ -19,7 +19,7 @@ func ExtractBundledGDPI() (string, error) {
 	if err != nil {
 		return "", err
 	}
-	binDir := filepath.Join(dir, "SpAC3DPI", "bin")
+	binDir := filepath.Join(dir, "LunaProxy", "bin")
 	if err := os.MkdirAll(binDir, 0755); err != nil {
 		return "", err
 	}
