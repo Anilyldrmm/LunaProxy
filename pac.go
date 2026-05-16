@@ -21,12 +21,13 @@ var (
 )
 
 // setPACRunning — proxy açıkken PAC'ı proxy+DIRECT moduna alır.
-// BypassDomains doluysa sadece o domain'ler proxy'den geçer; boşsa tüm trafik.
+// BypassEnabled=true ve BypassDomains doluysa sadece o domain'ler proxy'den geçer;
+// aksi takdirde tüm trafik proxy'den geçer.
 func setPACRunning(localIP string, proxyPort int) {
 	c := getConfig()
 	proxy := fmt.Sprintf(`"PROXY %s:%d; DIRECT"`, localIP, proxyPort)
 	var body string
-	if len(c.BypassDomains) == 0 {
+	if !c.BypassEnabled || len(c.BypassDomains) == 0 {
 		body = fmt.Sprintf(`function FindProxyForURL(url,host){return %s;}`, proxy)
 	} else {
 		var sb strings.Builder

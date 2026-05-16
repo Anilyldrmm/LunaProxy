@@ -34,12 +34,33 @@ type Config struct {
 	AutoStart      bool `json:"auto_start"`       // Windows startup kaydı
 	ProxyAutoStart bool `json:"proxy_auto_start"` // App açılınca proxy'yi otomatik başlat
 
-	// Bypass domain listesi — boşsa tüm trafik proxy'den geçer;
-	// doluysa sadece listedeki domain'ler proxy'ye yönlendirilir.
+	// Bypass domain filtresi — BypassEnabled=true iken sadece listedeki
+	// domain'ler proxy'ye yönlendirilir; false ise tüm trafik proxy'den geçer.
+	BypassEnabled bool     `json:"bypass_enabled"`
 	BypassDomains []string `json:"bypass_domains"`
 
 	// UI
 	Theme string `json:"theme"` // "neutral" | "purple"
+}
+
+// defaultBypassDomains — yeni kurulumda ön tanımlı gelen domain listesi (Discord + Roblox).
+var defaultBypassDomains = []string{
+	// Discord
+	"discord.com",
+	"discordapp.com",
+	"discord.gg",
+	"discordapp.net",
+	"gateway.discord.gg",
+	"cdn.discordapp.com",
+	"media.discordapp.net",
+	"dl.discordapp.net",
+	// Roblox
+	"roblox.com",
+	"rbxcdn.com",
+	"roproxy.com",
+	"rbxtrk.com",
+	"apis.roblox.com",
+	"assetdelivery.roblox.com",
 }
 
 // ── DPI Modları ───────────────────────────────────────────────────────────────
@@ -101,6 +122,8 @@ func defaultConfig() Config {
 		DNSMode:        "unchanged",
 		DPISource:      "auto",
 		SetSystemProxy: false,
+		BypassEnabled:  true,
+		BypassDomains:  defaultBypassDomains,
 	}
 }
 
@@ -114,7 +137,9 @@ func configFilePath() string {
 
 func loadConfig() {
 	c := defaultConfig()
+	fileExists := false
 	if data, err := os.ReadFile(configFilePath()); err == nil {
+		fileExists = true
 		json.Unmarshal(data, &c)
 	}
 	if c.ProxyPort == 0 { c.ProxyPort = 8888 }
@@ -123,6 +148,15 @@ func loadConfig() {
 	if c.ChunkSize == 0 { c.ChunkSize = 40 }
 	if c.ISP == "" { c.ISP = "auto" }
 	if c.DPISource == "" { c.DPISource = "auto" }
+	// Mevcut config'de bypass_domains yoksa varsayılanları yükle.
+	// Yeni kurulum ise BypassEnabled zaten defaultConfig'de true geldi.
+	// Eski kurulum (dosya var, alan yok) için mevcut davranış korunur: enabled=false.
+	if c.BypassDomains == nil {
+		c.BypassDomains = defaultBypassDomains
+		if !fileExists {
+			c.BypassEnabled = true
+		}
+	}
 	cfgMu.Lock()
 	current = c
 	cfgMu.Unlock()

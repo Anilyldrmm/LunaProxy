@@ -327,10 +327,12 @@ body {
   width:100%; background:var(--surface2); border:1px solid var(--border);
   border-radius:8px; color:var(--text); padding:9px 12px; font-size:11px;
   font-family:Consolas,monospace; outline:none; resize:vertical;
-  min-height:72px; line-height:1.6; margin-bottom:4px;
+  min-height:140px; line-height:1.6; margin-bottom:4px; transition:border-color .2s;
 }
 .bypass-ta:focus { border-color:var(--accent); }
 .bypass-ta::placeholder { color:var(--sub); }
+#bypass-domain-card { transition:opacity .2s; }
+#bypass-domain-card.dim { opacity:.35; pointer-events:none; }
 
 /* ── SETTINGS panel ── */
 .s-label { font-size:10px; text-transform:uppercase; letter-spacing:.8px; color:var(--sub); font-weight:600; margin-bottom:6px; }
@@ -600,6 +602,12 @@ window.addEventListener('DOMContentLoaded', function() {
         </svg>
         <div class="tooltip">Router</div>
       </div>
+      <div class="nav" data-p="domains" onclick="go(this)">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+          <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/>
+        </svg>
+        <div class="tooltip">Domainler</div>
+      </div>
       <div class="nav" data-p="logs" onclick="go(this)">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
           <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>
@@ -723,11 +731,6 @@ window.addEventListener('DOMContentLoaded', function() {
             <option value="quad9">Quad9</option>
             <option value="opendns">OpenDNS</option>
           </select>
-        </div>
-        <div class="card">
-          <div class="card-title">Bypass Domain Listesi <span style="font-size:10px;color:var(--sub);font-weight:400;text-transform:none;letter-spacing:0">— boşsa tüm trafik proxy'den geçer</span></div>
-          <div style="font-size:11px;color:var(--sub);margin-bottom:8px;line-height:1.6">Her satıra bir domain. Sadece bu domainler proxy'ye yönlendirilir, geri kalanı direkt bağlanır.</div>
-          <textarea id="inp-bypass" class="bypass-ta" placeholder="youtube.com&#10;netflix.com&#10;twitch.tv"></textarea>
         </div>
         <div class="card">
           <div class="card-title">Sistem</div>
@@ -888,6 +891,33 @@ window.addEventListener('DOMContentLoaded', function() {
         </div>
       </div>
 
+      <!-- DOMAINS -->
+      <div class="panel" id="panel-domains">
+        <div class="card">
+          <div class="card-title">Domain Filtresi</div>
+          <div class="sw-row" style="margin-bottom:0">
+            <div>
+              <div class="sw-label">Yalnızca listede proxy'ye yönlendir</div>
+              <div class="sw-sub">Kapalıyken tüm trafik DPI bypass'tan geçer</div>
+            </div>
+            <label class="sw"><input type="checkbox" id="sw-bypass-enabled" onchange="onBypassToggle(this.checked)"><div class="sw-track"></div></label>
+          </div>
+        </div>
+        <div class="card" id="bypass-domain-card">
+          <div class="card-title" style="margin-bottom:6px">Domain Listesi</div>
+          <div style="font-size:11px;color:var(--sub);margin-bottom:10px;line-height:1.6">
+            Her satıra bir domain. Listedeki domainler proxy üzerinden bağlanır, diğerleri doğrudan bağlanır.
+          </div>
+          <div style="display:flex;gap:6px;margin-bottom:8px">
+            <button class="cp-btn" style="font-size:10px;padding:4px 10px" onclick="resetBypassDefaults()">Varsayılanları Yükle</button>
+            <button class="cp-btn" style="font-size:10px;padding:4px 10px;background:transparent;border:1px solid var(--border);color:var(--sub)" onclick="document.getElementById('inp-bypass').value=''">Listeyi Temizle</button>
+          </div>
+          <textarea id="inp-bypass" class="bypass-ta" placeholder="discord.com&#10;roblox.com&#10;youtube.com" oninput="updateBypassCount()"></textarea>
+          <div style="font-size:10px;color:var(--sub);margin-top:4px;text-align:right" id="bypass-count">0 domain</div>
+        </div>
+        <button class="save-btn" onclick="saveSettings()">Kaydet</button>
+      </div>
+
       <!-- LOGS -->
       <div class="panel" id="panel-logs">
         <div class="log-bar">
@@ -975,6 +1005,7 @@ function saveSettings() {
     dpi_mode: (document.querySelector('.radio-item.sel[data-val]') || {dataset:{val:'balanced'}}).dataset.val || 'balanced',
     isp: (document.getElementById('sel-isp') || {value:'auto'}).value || 'auto',
     dns_mode: (document.getElementById('sel-dns') || {value:'unchanged'}).value || 'unchanged',
+    bypass_enabled: !!(document.getElementById('sw-bypass-enabled') || {}).checked,
     bypass_domains: bypassDomains,
     set_system_proxy: !!(document.getElementById('sw-sysproxy') || {}).checked,
     auto_start: !!(document.getElementById('sw-autostart') || {}).checked,
@@ -1070,6 +1101,28 @@ function showISPSuggestion(isp, mode) {
   hint.classList.add('vis');
   if (hm) hm.textContent = _ispModeNames[mode] || mode;
 }
+var _defaultBypassDomains = [
+  'discord.com','discordapp.com','discord.gg','discordapp.net',
+  'gateway.discord.gg','cdn.discordapp.com','media.discordapp.net','dl.discordapp.net',
+  'roblox.com','rbxcdn.com','roproxy.com','rbxtrk.com',
+  'apis.roblox.com','assetdelivery.roblox.com'
+];
+function onBypassToggle(checked) {
+  var card = document.getElementById('bypass-domain-card');
+  if (card) card.classList.toggle('dim', !checked);
+}
+function resetBypassDefaults() {
+  var ta = document.getElementById('inp-bypass');
+  if (ta) { ta.value = _defaultBypassDomains.join('\n'); updateBypassCount(); }
+}
+function updateBypassCount() {
+  var ta = document.getElementById('inp-bypass');
+  var cnt = document.getElementById('bypass-count');
+  if (!ta || !cnt) return;
+  var n = ta.value.split('\n').map(function(s){return s.trim();}).filter(Boolean).length;
+  cnt.textContent = n + ' domain';
+}
+
 function applyISPSuggestion() {
   if (!_ispSuggestMode) return;
   document.querySelectorAll('.radio-item[data-val]').forEach(function(el) {
@@ -1294,10 +1347,15 @@ function loadSettings(cfg) {
   if (ispSel) ispSel.value = cfg.isp||cfg.ISP||'auto';
   var dnsSel = document.getElementById('sel-dns');
   if (dnsSel) dnsSel.value = cfg.dns_mode||cfg.DNSMode||'unchanged';
+  var bypassEnabled = !!(cfg.bypass_enabled !== undefined ? cfg.bypass_enabled : (cfg.BypassEnabled !== undefined ? cfg.BypassEnabled : false));
+  var swBypass = document.getElementById('sw-bypass-enabled');
+  if (swBypass) swBypass.checked = bypassEnabled;
+  onBypassToggle(bypassEnabled);
   var bypassTa = document.getElementById('inp-bypass');
   if (bypassTa) {
     var domains = cfg.bypass_domains||cfg.BypassDomains||[];
     bypassTa.value = Array.isArray(domains) ? domains.join('\n') : (domains||'');
+    updateBypassCount();
   }
   var savedTheme = cfg.theme||cfg.Theme;
   if (savedTheme && savedTheme !== _currentTheme) applyTheme(savedTheme);
