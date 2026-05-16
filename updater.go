@@ -116,35 +116,21 @@ func DownloadAndReplace(downloadURL string) error {
 	isSetup := strings.Contains(strings.ToLower(urlBase), "setup")
 
 	if isSetup {
-		// PS1 wrapper: installer'ı sessizce çalıştır, bitince uygulamayı yeniden başlat.
-		// /VERYSILENT modunda Inno Setup [Run]/postinstall entryleri atlandığından
-		// kurulum sonrası yeniden başlatmayı biz yapıyoruz.
-		ps1Setup := filepath.Join(tmpDir, "LunaProxy_setup.ps1")
-		const utf8BOM = "\xEF\xBB\xBF"
-		setupScript := utf8BOM + fmt.Sprintf(`$setup = '%s'
-$ps1path = '%s'
-Start-Process -FilePath $setup -ArgumentList '/VERYSILENT /NORESTART /CLOSEAPPLICATIONS' -Wait
-$appPath = [System.Environment]::GetFolderPath('ProgramFiles') + '\LunaProxy\LunaProxy.exe'
-if (Test-Path $appPath) {
-    Start-Process -FilePath $appPath
-}
-Remove-Item $ps1path -ErrorAction SilentlyContinue
-`, tmpFile, ps1Setup)
-		if err := os.WriteFile(ps1Setup, []byte(setupScript), 0644); err != nil {
-			return err
-		}
-		exe, _ := windows.UTF16PtrFromString("powershell.exe")
-		args, _ := windows.UTF16PtrFromString("-ExecutionPolicy Bypass -WindowStyle Hidden -File " + ps1Setup)
+		// Installer'ı doğrudan ShellExecuteW ile başlat.
+		// requireAdministrator manifest'i UAC'ı otomatik tetikler — PS1 wrapper gereksiz.
+		// Installer /VERYSILENT modunda [Run] Check:WizardSilent entry'si ile uygulamayı yeniden başlatır.
+		exePtr, _ := windows.UTF16PtrFromString(tmpFile)
+		argsPtr, _ := windows.UTF16PtrFromString("/VERYSILENT /NORESTART /CLOSEAPPLICATIONS")
 		r, _, _ := shellExecW.Call(
 			0,
 			uintptr(unsafe.Pointer(op)),
-			uintptr(unsafe.Pointer(exe)),
-			uintptr(unsafe.Pointer(args)),
+			uintptr(unsafe.Pointer(exePtr)),
+			uintptr(unsafe.Pointer(argsPtr)),
 			0,
 			1,
 		)
 		if r <= 32 {
-			return fmt.Errorf("güncelleme script başlatılamadı (ShellExecute: %d)", r)
+			return fmt.Errorf("installer başlatılamadı (ShellExecute: %d)", r)
 		}
 		os.Exit(0)
 		return nil

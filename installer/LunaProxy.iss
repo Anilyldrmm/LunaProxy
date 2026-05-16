@@ -1,5 +1,5 @@
 ﻿#define AppName      "LunaProxy"
-#define AppVersion   "1.0.11"
+#define AppVersion   "1.0.12"
 #define AppPublisher "SpAC3"
 #define AppURL       "https://github.com/Anilyldrmm/LunaProxy"
 #define AppExe       "LunaProxy.exe"
@@ -51,8 +51,11 @@ Root: HKCU; Subkey: "Software\Microsoft\Windows\CurrentVersion\Run"; \
   Flags: uninsdeletevalue; Tasks: startupicon
 
 [Run]
+; Normal kurulum: son sayfada checkbox olarak göster
 Filename: "{app}\{#AppExe}"; Description: "{#AppName}'i şimdi başlat"; \
   Flags: nowait postinstall skipifsilent runascurrentuser
+; Sessiz kurulum (auto-update): her zaman çalıştır, postinstall atlansın
+Filename: "{app}\{#AppExe}"; Flags: nowait runascurrentuser; Check: WizardSilent
 
 [UninstallRun]
 Filename: "taskkill"; Parameters: "/f /im {#AppExe}"; Flags: runhidden; RunOnceId: "KillApp"
