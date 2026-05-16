@@ -108,9 +108,9 @@ func buildPACMux(localIP string, port int) *http.ServeMux {
 		body := pacBody
 		pacMu.RUnlock()
 		w.Header().Set("Content-Type", "application/x-ns-proxy-autoconfig")
-		// no-cache: iOS PAC'ı önbelleğe almasın; proxy kapanınca DIRECT'i hemen görsün.
-		w.Header().Set("Cache-Control", "no-store, no-cache, must-revalidate")
-		w.Header().Set("Pragma", "no-cache")
+		// 60s cache: mobil PAC server çöktüğünde eski cache'i kullanır.
+		// PROXY;DIRECT döndüğü için proxy erişilemeyince DIRECT'e geçer.
+		w.Header().Set("Cache-Control", "max-age=60")
 		fmt.Fprint(w, body)
 	}
 
