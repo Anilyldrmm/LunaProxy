@@ -30,12 +30,17 @@ var (
 	wvProcBringWindowToTop    = wvModUser32.NewProc("BringWindowToTop")
 	wvProcIsIconic            = wvModUser32.NewProc("IsIconic")
 	wvProcSwitchToThisWindow  = wvModUser32.NewProc("SwitchToThisWindow")
+	wvProcSetWindowLongPtr    = wvModUser32.NewProc("SetWindowLongPtrW")
+	wvProcCallWindowProc      = wvModUser32.NewProc("CallWindowProcW")
 
 	wvModDwmapi            = windows.NewLazySystemDLL("dwmapi.dll")
 	wvProcDwmSetWindowAttr = wvModDwmapi.NewProc("DwmSetWindowAttribute")
 )
 
 const (
+	wvGwlpWndProc = ^uintptr(3) // GWLP_WNDPROC = -4
+	wvWmClose     = uintptr(0x0010)
+
 	wvWsPopup      = uint32(0x80000000)
 	wvWsCaption    = uint32(0x00C00000)
 	wvWsSysMenu    = uint32(0x00080000)
@@ -63,6 +68,20 @@ const (
 // wv — global WebView referansı; ipc.go'dan erişilir.
 var wv webview.WebView
 
+// origWndProc — subclass önceki orijinal pencere prosedürü.
+var origWndProc uintptr
+
+// wndProcCallback — WM_CLOSE gelince pencereyi kapatmak yerine gizler (tray'e gönderir).
+// syscall.NewCallback sonucu package-level tutulmalı; GC'ye gitmemeli.
+var wndProcCallback = syscall.NewCallback(func(hwnd, msg, wparam, lparam uintptr) uintptr {
+	if msg == wvWmClose {
+		wvProcShowWindow.Call(hwnd, wvSwHide)
+		return 0
+	}
+	r, _, _ := wvProcCallWindowProc.Call(origWndProc, hwnd, msg, wparam, lparam)
+	return r
+})
+
 // initWindow — WebView2 penceresini oluşturur, frameless yapar ve çalıştırır.
 // Bu fonksiyon main goroutine'de çağrılmalı; bloklar (Run() içerir).
 func initWindow() {
@@ -84,6 +103,9 @@ func initWindow() {
 	wvCenterWindow(hwnd, 400, 640)
 	wvApplyDWMShadow(hwnd)
 	wvSetTaskbarIcon(hwnd)
+
+	// WM_CLOSE subclass — thumbnail X ve Alt+F4 pencereyi kapatmak yerine tray'e gönderir.
+	origWndProc, _, _ = wvProcSetWindowLongPtr.Call(hwnd, wvGwlpWndProc, wndProcCallback)
 
 	// Logo + versiyon inject — sayfa yüklenmeden önce hazır olsun
 	logoB64 := logoBase64()
