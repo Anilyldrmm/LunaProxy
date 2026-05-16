@@ -34,6 +34,9 @@ server.errorlog = "/tmp/lunaproxy_lighttpd.log"
 server.modules = ("mod_cgi", "mod_accesslog")
 accesslog.filename = "/dev/null"
 cgi.assign = (".sh" => "/opt/bin/sh", ".pac" => "/opt/bin/sh")
+$HTTP["url"] == "/pac" {
+  cgi.assign = ("" => "/opt/bin/sh")
+}
 mimetype.assign = (
   ".pac" => "application/x-ns-proxy-autoconfig",
   ".dat" => "application/x-ns-proxy-autoconfig"
@@ -305,12 +308,14 @@ func RouterInstall(cfg RouterSetupCfg, progress func(RouterStep)) error {
 	}
 
 	// CGI scriptleri cgi-bin/ altına yaz (lighttpd ext-match + BusyBox cgi-bin kuralı)
+	// /pac dosyası doc-root'a yazılır; lighttpd koşullu cgi.assign ile /pac URL'sini çalıştırır.
 	files := []struct {
 		path    string
 		content string
 		exec    bool
 	}{
-		{cgiDir + "/proxy.pac", routerProxyPac, true},
+		{pacDir + "/pac", routerProxyPac, true},
+		{cgiDir + "/proxy.pac", routerProxyPac, true}, // eski kurulumlar için
 		{cgiDir + "/hb.sh", routerHbSh, true},
 		{cgiDir + "/update.sh", routerUpdateSh, true},
 	}
@@ -375,14 +380,14 @@ func RouterInstall(cfg RouterSetupCfg, progress func(RouterStep)) error {
 	}
 
 	time.Sleep(800 * time.Millisecond)
-	testURL := fmt.Sprintf("http://%s:8090/cgi-bin/proxy.pac", cfg.Host)
+	testURL := fmt.Sprintf("http://%s:8090/pac", cfg.Host)
 	resp, err := (&http.Client{Timeout: 5 * time.Second}).Get(testURL)
 	if err != nil {
 		return fmt.Errorf("kurulum doğrulanamadı: %s erişilemiyor", testURL)
 	}
 	resp.Body.Close()
 	if resp.StatusCode != 200 {
-		return fmt.Errorf("proxy.pac HTTP %d döndü", resp.StatusCode)
+		return fmt.Errorf("/pac HTTP %d döndü", resp.StatusCode)
 	}
 	progress(RouterStep{fmt.Sprintf("Doğrulandı — %s erişilebilir", testURL), "ok"})
 
@@ -391,7 +396,7 @@ func RouterInstall(cfg RouterSetupCfg, progress func(RouterStep)) error {
 
 // RouterTest — önceden kurulu bir router'ın PAC endpoint'ini test eder.
 func RouterTest(host string) error {
-	url := fmt.Sprintf("http://%s:8090/cgi-bin/proxy.pac", host)
+	url := fmt.Sprintf("http://%s:8090/pac", host)
 	resp, err := (&http.Client{Timeout: 5 * time.Second}).Get(url)
 	if err != nil {
 		return fmt.Errorf("%s erişilemiyor", url)

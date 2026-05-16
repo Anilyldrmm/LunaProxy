@@ -132,7 +132,7 @@ func buildPACMux(localIP string, port int) *http.ServeMux {
 	setupURL := fmt.Sprintf("http://%s:%d/setup", localIP, port)
 	_ = setupURL
 
-	routerPACURL := fmt.Sprintf("http://%s:8090/cgi-bin/proxy.pac", guessGatewayIP(localIP))
+	routerPACURL := fmt.Sprintf("http://%s:8090/pac", guessGatewayIP(localIP))
 
 	mux.HandleFunc("/setup", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
@@ -200,11 +200,10 @@ hr{border:none;border-top:1px solid #2A2240;margin:16px 0}
 <script>
 function cp(id,btn){
   var url=document.getElementById(id).textContent.trim();
-  navigator.clipboard.writeText(url).then(function(){
-    var b=document.getElementById(btn);
-    var orig=b.textContent;
-    b.textContent='Kopyalandi';b.classList.add('copied');
-    setTimeout(function(){b.textContent=orig;b.classList.remove('copied');},2000);
-  });
+  var b=document.getElementById(btn);
+  var orig=b.textContent;
+  function ok(){b.textContent='Kopyalandi';b.classList.add('copied');setTimeout(function(){b.textContent=orig;b.classList.remove('copied');},2000);}
+  function fallback(){var ta=document.createElement('textarea');ta.value=url;document.body.appendChild(ta);ta.select();try{document.execCommand('copy');ok();}catch(e){}document.body.removeChild(ta);}
+  if(navigator.clipboard){navigator.clipboard.writeText(url).then(ok).catch(fallback);}else{fallback();}
 }
 </script></body></html>`
