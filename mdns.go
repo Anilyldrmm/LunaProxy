@@ -9,30 +9,31 @@ import (
 	"time"
 )
 
-// mdnsLookup — cihazın IP'sine doğrudan UDP:5353 ile PTR sorgusu gönderir.
-// iPhone (Bonjour/mDNS) ve diğer mDNS destekli cihazlar için hostname döndürür.
+// mdnsLookup — cihaza doğrudan UDP:5353 ile mDNS PTR sorgusu gönderir.
+// iPhone (Bonjour) ve mDNS destekli cihazlar hostname döndürür.
 func mdnsLookup(ip string) string {
 	parts := strings.Split(ip, ".")
 	if len(parts) != 4 {
 		return ""
 	}
 	arpa := fmt.Sprintf("%s.%s.%s.%s.in-addr.arpa", parts[3], parts[2], parts[1], parts[0])
-
 	pkt := buildDNSPTRQuery(arpa)
 
-	conn, err := net.DialUDP("udp4", nil, &net.UDPAddr{IP: net.ParseIP(ip), Port: 5353})
+	// ListenUDP: gelen yanıt farklı kaynak porttan gelebilir
+	conn, err := net.ListenUDP("udp4", &net.UDPAddr{IP: net.IPv4zero, Port: 0})
 	if err != nil {
 		return ""
 	}
 	defer conn.Close()
-	conn.SetDeadline(time.Now().Add(1200 * time.Millisecond))
+	conn.SetDeadline(time.Now().Add(1500 * time.Millisecond))
 
-	if _, err := conn.Write(pkt); err != nil {
+	dst := &net.UDPAddr{IP: net.ParseIP(ip), Port: 5353}
+	if _, err := conn.WriteToUDP(pkt, dst); err != nil {
 		return ""
 	}
 
 	buf := make([]byte, 512)
-	n, err := conn.Read(buf)
+	n, _, err := conn.ReadFromUDP(buf)
 	if err != nil {
 		return ""
 	}
@@ -41,7 +42,7 @@ func mdnsLookup(ip string) string {
 
 func buildDNSPTRQuery(name string) []byte {
 	pkt := []byte{
-		0, 1, // ID
+		0, 0, // ID = 0 (mDNS standardı)
 		0, 0, // Flags: standard query
 		0, 1, // QDCOUNT = 1
 		0, 0, 0, 0, 0, 0, // ANCOUNT, NSCOUNT, ARCOUNT = 0
@@ -55,7 +56,7 @@ func buildDNSPTRQuery(name string) []byte {
 	}
 	pkt = append(pkt, 0)      // root label
 	pkt = append(pkt, 0, 12)  // QTYPE = PTR
-	pkt = append(pkt, 0, 1)   // QCLASS = IN
+	pkt = append(pkt, 0x80, 0x01) // QCLASS = IN | QU bit (unicast yanıt iste)
 	return pkt
 }
 

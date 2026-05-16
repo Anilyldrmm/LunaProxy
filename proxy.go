@@ -56,9 +56,11 @@ func resolveHostname(ip string) {
 
 func incDeviceConn(ip string) {
 	v, loaded := devices.LoadOrStore(ip, &deviceEntry{})
-	atomic.AddInt64(&v.(*deviceEntry).ActiveConns, 1)
-	if !loaded {
-		go resolveHostname(ip) // ilk bağlantıda async hostname çözümle
+	e := v.(*deviceEntry)
+	atomic.AddInt64(&e.ActiveConns, 1)
+	// İlk bağlantıda ya da daha önce hostname çözülemediyse tekrar dene
+	if !loaded || e.hostname.Load() == nil {
+		go resolveHostname(ip)
 	}
 }
 

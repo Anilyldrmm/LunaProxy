@@ -29,3 +29,4 @@ ssh_*.py
 *_debug.*
 *_test.*
 *_dbg.*
+cmd_diag/
