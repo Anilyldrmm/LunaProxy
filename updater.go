@@ -76,24 +76,30 @@ func CheckUpdate() (tagName, downloadURL string, err error) {
 		return "", "", nil
 	}
 	for _, a := range rel.Assets {
-		if strings.EqualFold(a.Name, "LunaProxy.exe") {
+		name := strings.ToLower(a.Name)
+		if strings.HasSuffix(name, ".exe") {
 			return rel.TagName, a.BrowserDownloadURL, nil
 		}
 	}
 	return rel.TagName, "", nil
 }
 
-// DownloadAndReplace — yeni exe'yi indirir, PS1 replace script çalıştırır, çıkar.
+// DownloadAndReplace — güncelleme dosyasını indirir ve uygular.
+// Setup installer ise /VERYSILENT ile çalıştırır.
+// Raw exe ise PS1 replace script ile mevcut exe'yi değiştirir.
 func DownloadAndReplace(downloadURL string) error {
 	tmpDir := os.TempDir()
-	newExe := filepath.Join(tmpDir, "LunaProxy_update.exe")
+
+	// URL'den dosya adını çıkar
+	urlBase := downloadURL[strings.LastIndex(downloadURL, "/")+1:]
+	tmpFile := filepath.Join(tmpDir, urlBase)
 
 	resp, err := http.Get(downloadURL)
 	if err != nil {
 		return fmt.Errorf("indirme hatası: %w", err)
 	}
 	defer resp.Body.Close()
-	f, err := os.Create(newExe)
+	f, err := os.Create(tmpFile)
 	if err != nil {
 		return err
 	}
@@ -103,14 +109,37 @@ func DownloadAndReplace(downloadURL string) error {
 	}
 	f.Close()
 
+	shell32 := windows.NewLazySystemDLL("shell32.dll")
+	shellExecW := shell32.NewProc("ShellExecuteW")
+	op, _ := windows.UTF16PtrFromString("open")
+
+	isSetup := strings.Contains(strings.ToLower(urlBase), "setup")
+
+	if isSetup {
+		// Installer: sessiz kurulum — eski sürümün üzerine yazar, tekrar başlatır.
+		exePtr, _ := windows.UTF16PtrFromString(tmpFile)
+		argsPtr, _ := windows.UTF16PtrFromString("/VERYSILENT /NORESTART /CLOSEAPPLICATIONS")
+		r, _, _ := shellExecW.Call(
+			0,
+			uintptr(unsafe.Pointer(op)),
+			uintptr(unsafe.Pointer(exePtr)),
+			uintptr(unsafe.Pointer(argsPtr)),
+			0,
+			1,
+		)
+		if r <= 32 {
+			return fmt.Errorf("installer başlatılamadı (ShellExecute: %d)", r)
+		}
+		os.Exit(0)
+		return nil
+	}
+
+	// Raw exe: PS1 replace script ile değiştir ve yeniden başlat.
 	selfExe, err := os.Executable()
 	if err != nil {
 		return err
 	}
-
 	ps1 := filepath.Join(tmpDir, "LunaProxy_update.ps1")
-	// UTF-8 BOM zorunlu: PowerShell 5.x BOM olmadan Windows-1252 okur,
-	// non-ASCII yollar (örn. "Masaüstü") bozulur ve Copy-Item başarısız olur.
 	const utf8BOM = "\xEF\xBB\xBF"
 	script := utf8BOM + fmt.Sprintf(`$src = '%s'
 $dst = '%s'
@@ -130,17 +159,10 @@ if ($ok) {
     Start-Process -FilePath $dst
 }
 Remove-Item $ps1path -ErrorAction SilentlyContinue
-`, newExe, selfExe, ps1)
+`, tmpFile, selfExe, ps1)
 	if err := os.WriteFile(ps1, []byte(script), 0644); err != nil {
 		return err
 	}
-
-	// ShellExecuteW ile PowerShell başlat — exec.Command -WindowStyle Hidden
-	// non-interactive session açar ve oradan admin-manifest'li exe başlatılamaz.
-	// ShellExecuteW caller'ın interactive session'ını devralır; Start-Process çalışır.
-	shell32 := windows.NewLazySystemDLL("shell32.dll")
-	shellExecW := shell32.NewProc("ShellExecuteW")
-	op, _ := windows.UTF16PtrFromString("open")
 	exe, _ := windows.UTF16PtrFromString("powershell.exe")
 	args, _ := windows.UTF16PtrFromString("-ExecutionPolicy Bypass -WindowStyle Hidden -File " + ps1)
 	r, _, _ := shellExecW.Call(
@@ -149,7 +171,7 @@ Remove-Item $ps1path -ErrorAction SilentlyContinue
 		uintptr(unsafe.Pointer(exe)),
 		uintptr(unsafe.Pointer(args)),
 		0,
-		1, // SW_SHOWNORMAL
+		1,
 	)
 	if r <= 32 {
 		return fmt.Errorf("güncelleme script başlatılamadı (ShellExecute: %d)", r)
