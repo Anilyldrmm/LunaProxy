@@ -36,7 +36,9 @@ jobs:
       - name: Install Inno Setup
         shell: pwsh
         run: |
-          winget install JRSoftware.InnoSetup --silent --accept-source-agreements --accept-package-agreements
+          if (-not (Test-Path "C:\Program Files (x86)\Inno Setup 6\ISCC.exe")) {
+            choco install innosetup --yes
+          }
           echo "C:\Program Files (x86)\Inno Setup 6" >> $env:GITHUB_PATH
 
       - name: Build installer
