@@ -173,7 +173,7 @@ Remove-Item $ps1path -ErrorAction SilentlyContinue
 		uintptr(unsafe.Pointer(exe)),
 		uintptr(unsafe.Pointer(args)),
 		0,
-		1,
+		0, // SW_HIDE
 	)
 	if r <= 32 {
 		return fmt.Errorf("güncelleme script başlatılamadı (ShellExecute: %d)", r)
