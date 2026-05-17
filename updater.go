@@ -6,6 +6,7 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -165,18 +166,11 @@ Remove-Item $ps1path -ErrorAction SilentlyContinue
 	if err := os.WriteFile(ps1, []byte(script), 0644); err != nil {
 		return err
 	}
-	exe, _ := windows.UTF16PtrFromString("powershell.exe")
-	args, _ := windows.UTF16PtrFromString("-ExecutionPolicy Bypass -WindowStyle Hidden -File " + ps1)
-	r, _, _ := shellExecW.Call(
-		0,
-		uintptr(unsafe.Pointer(op)),
-		uintptr(unsafe.Pointer(exe)),
-		uintptr(unsafe.Pointer(args)),
-		0,
-		0, // SW_HIDE
-	)
-	if r <= 32 {
-		return fmt.Errorf("güncelleme script başlatılamadı (ShellExecute: %d)", r)
+	// exec.Command ile başlat — mevcut process'in admin token'ını miras alır,
+	// Program Files gibi korumalı konumlardaki exe'leri de overwrite edebilir.
+	cmd := exec.Command("powershell.exe", "-ExecutionPolicy", "Bypass", "-WindowStyle", "Hidden", "-NonInteractive", "-File", ps1)
+	if err := cmd.Start(); err != nil {
+		return fmt.Errorf("güncelleme script başlatılamadı: %w", err)
 	}
 	os.Exit(0)
 	return nil
