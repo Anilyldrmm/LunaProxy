@@ -167,7 +167,13 @@ func handleConnect(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		http.Error(w, "bağlantı kurulamadı", http.StatusBadGateway)
 		stats.incError()
-		logWarn(fmt.Sprintf("CONNECT %s → hata: %v", r.Host, err))
+		host := r.Host
+		if h, _, e := net.SplitHostPort(host); e == nil {
+			host = h
+		}
+		if !strings.HasSuffix(host, ".invalid") {
+			logWarn(fmt.Sprintf("CONNECT %s → hata: %v", r.Host, err))
+		}
 		return
 	}
 
