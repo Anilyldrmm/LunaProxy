@@ -36,14 +36,13 @@ jobs:
       - name: Install Inno Setup
         shell: pwsh
         run: |
-          $url = "https://jrsoftware.org/download.php/is.exe"
-          Invoke-WebRequest $url -OutFile is.exe
-          Start-Process -FilePath is.exe -ArgumentList "/VERYSILENT /NORESTART" -Wait
+          winget install JRSoftware.InnoSetup --silent --accept-source-agreements --accept-package-agreements
+          echo "C:\Program Files (x86)\Inno Setup 6" >> $env:GITHUB_PATH
 
       - name: Build installer
         shell: pwsh
         run: |
-          & "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" installer\LunaProxy.iss
+          & "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" /DAppVersion=${{ steps.version.outputs.VERSION }} installer\LunaProxy.iss
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2

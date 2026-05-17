@@ -1,5 +1,7 @@
 ﻿#define AppName      "LunaProxy"
-#define AppVersion   "1.0.19"
+#ifndef AppVersion
+  #define AppVersion "1.0.20"
+#endif
 #define AppPublisher "SpAC3"
 #define AppURL       "https://github.com/Anilyldrmm/LunaProxy"
 #define AppExe       "LunaProxy.exe"
