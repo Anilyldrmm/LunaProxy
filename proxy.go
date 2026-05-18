@@ -38,9 +38,21 @@ func trackDevice(ip string, bytes int64) {
 
 func resolveHostname(ip string) {
 	name := ""
+	// Tailscale IP'si (100.x.x.x) — peer listesinden doğrudan al
+	if strings.HasPrefix(ip, "100.") {
+		ts := getTailscaleStatus()
+		for _, p := range ts.Peers {
+			if p.IP == ip && p.Name != "" {
+				name = p.Name
+				break
+			}
+		}
+	}
 	// DNS PTR (Windows cihazları, bazı Android)
-	if ns, err := net.LookupAddr(ip); err == nil && len(ns) > 0 {
-		name = strings.TrimSuffix(ns[0], ".")
+	if name == "" {
+		if ns, err := net.LookupAddr(ip); err == nil && len(ns) > 0 {
+			name = strings.TrimSuffix(ns[0], ".")
+		}
 	}
 	// mDNS/Bonjour unicast (iPhone, macOS, modern Android)
 	if name == "" {
