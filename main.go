@@ -66,6 +66,8 @@ func main() {
 		pushStatus()
 	})
 
+	startDDNSUpdater()
+
 	if c.ProxyAutoStart {
 		if err := g.start(); err != nil {
 			logError("Otomatik başlatma hatası: " + err.Error())

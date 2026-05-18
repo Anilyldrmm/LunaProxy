@@ -157,6 +157,47 @@ func handleIPCMessage(data string) {
 		json.Unmarshal(msg.Payload, &p) //nolint:errcheck
 		pushISPSuggestion(p.ISP)
 
+	case "requestMobileData":
+		go func() {
+			c := getConfig()
+			ip := fetchPublicIP()
+
+			// DDNS yapılandırılmışsa hostname'i tercih et, yoksa ham IP kullan
+			ddnsSt := getDDNSStatus()
+			displayAddr := ip
+			if ddnsSt.Enabled && ddnsSt.Hostname != "" {
+				displayAddr = ddnsSt.Hostname
+			}
+
+			proxyURL := ""
+			if displayAddr != "" {
+				proxyURL = fmt.Sprintf("http://%s:%d", displayAddr, c.ProxyPort)
+			}
+			var qrB64 string
+			if proxyURL != "" {
+				if png, err := qrcode.Encode(proxyURL, qrcode.High, 200); err == nil {
+					qrB64 = base64.StdEncoding.EncodeToString(png)
+				}
+			}
+			data, _ := json.Marshal(map[string]interface{}{
+				"publicIP":    ip,
+				"displayAddr": displayAddr,
+				"proxyPort":   c.ProxyPort,
+				"proxyUrl":    proxyURL,
+				"qrBase64":    qrB64,
+				"ddns":        ddnsSt,
+			})
+			evalJS(fmt.Sprintf(`updateMobileData(%s)`, data))
+		}()
+
+	case "testDDNS":
+		go func() {
+			ddnsTickForce()
+			st := getDDNSStatus()
+			data, _ := json.Marshal(st)
+			evalJS(fmt.Sprintf(`ddnsTestResult(%s)`, data))
+		}()
+
 	case "requestRouterDefaults":
 		c := getConfig()
 		gateway := guessGatewayIP(g.localIP)

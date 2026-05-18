@@ -34,6 +34,7 @@ type StatusPayload struct {
 	UpdateURL        string       `json:"updateURL"`
 	Devices          []DeviceInfo `json:"devices"`
 	BandwidthHistory []float64    `json:"bwHistory"`
+	DDNS             DDNSStatus   `json:"ddns"`
 }
 
 func buildStatus() StatusPayload {
@@ -103,5 +104,6 @@ func buildStatus() StatusPayload {
 		SetupURL:         fmt.Sprintf("http://%s:%d/setup", ip, c.PACPort),
 		Devices:          GetDevices(),
 		BandwidthHistory: bwHist.Snapshot(),
+		DDNS:             getDDNSStatus(),
 	}
 }
