@@ -159,8 +159,10 @@ func getDDNSStatus() DDNSStatus {
 }
 
 // updateDDNS — DuckDNS API'ye IP güncellemesi gönderir.
+// DuckDNS "OK" veya "OK\n<ip>\nNOCHANGE" döner — ikisi de başarıdır.
+// Hata durumunda "KO" döner.
 func updateDDNS(subdomain, token, ip string) error {
-	url := fmt.Sprintf("https://www.duckdns.org/update?domains=%s&token=%s&ip=%s&verbose=false",
+	url := fmt.Sprintf("https://www.duckdns.org/update?domains=%s&token=%s&ip=%s",
 		subdomain, token, ip)
 	c := &http.Client{Timeout: 10 * time.Second}
 	resp, err := c.Get(url)
@@ -170,7 +172,7 @@ func updateDDNS(subdomain, token, ip string) error {
 	defer resp.Body.Close()
 	body, _ := io.ReadAll(resp.Body)
 	result := strings.TrimSpace(string(body))
-	if result != "OK" {
+	if !strings.HasPrefix(result, "OK") {
 		return fmt.Errorf("duckdns yanıtı: %s", result)
 	}
 	return nil
