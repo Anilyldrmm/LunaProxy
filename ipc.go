@@ -160,13 +160,12 @@ func handleIPCMessage(data string) {
 	case "requestMobileData":
 		go func() {
 			c := getConfig()
-			ip := fetchPublicIP()
+			ts := refreshTailscaleStatus()
 
-			// DDNS yapılandırılmışsa hostname'i tercih et, yoksa ham IP kullan
-			ddnsSt := getDDNSStatus()
-			displayAddr := ip
-			if ddnsSt.Enabled && ddnsSt.Hostname != "" {
-				displayAddr = ddnsSt.Hostname
+			// Tailscale bağlıysa Tailscale IP'sini tercih et
+			displayAddr := ts.SelfIP
+			if !ts.Running {
+				displayAddr = fetchPublicIP()
 			}
 
 			proxyURL := ""
@@ -180,22 +179,20 @@ func handleIPCMessage(data string) {
 				}
 			}
 			data, _ := json.Marshal(map[string]interface{}{
-				"publicIP":    ip,
 				"displayAddr": displayAddr,
 				"proxyPort":   c.ProxyPort,
 				"proxyUrl":    proxyURL,
 				"qrBase64":    qrB64,
-				"ddns":        ddnsSt,
+				"tailscale":   ts,
 			})
 			evalJS(fmt.Sprintf(`updateMobileData(%s)`, data))
 		}()
 
-	case "testDDNS":
+	case "refreshTailscale":
 		go func() {
-			ddnsTickForce()
-			st := getDDNSStatus()
+			st := refreshTailscaleStatus()
 			data, _ := json.Marshal(st)
-			evalJS(fmt.Sprintf(`ddnsTestResult(%s)`, data))
+			evalJS(fmt.Sprintf(`updateTailscaleStatus(%s)`, data))
 		}()
 
 	case "requestRouterDefaults":

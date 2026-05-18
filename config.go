@@ -39,11 +39,6 @@ type Config struct {
 	BypassEnabled bool     `json:"bypass_enabled"`
 	BypassDomains []string `json:"bypass_domains"`
 
-	// DDNS (DuckDNS)
-	DDNSEnabled   bool   `json:"ddns_enabled"`
-	DDNSSubdomain string `json:"ddns_subdomain"` // örn: "benimproxy" → benimproxy.duckdns.org
-	DDNSToken     string `json:"ddns_token"`
-
 	// UI
 	Theme string `json:"theme"` // "neutral" | "purple"
 }
