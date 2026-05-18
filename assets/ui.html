@@ -799,6 +799,24 @@ window.addEventListener('DOMContentLoaded', function() {
             <div class="radio-item" data-theme="purple" onclick="setTheme('purple')"><div class="rdot"></div><div><div class="rtxt">Mor</div><div class="rsub">Klasik mor tema</div></div></div>
           </div>
         </div>
+        <div class="card">
+          <div class="card-title">DuckDNS — Dinamik IP Çözümü <span style="font-size:10px;color:var(--sub);font-weight:400">Mobil veri için önerilir</span></div>
+          <div class="sw-row" style="margin-bottom:10px">
+            <div><div class="sw-label">DuckDNS Aktif</div><div class="sw-sub">IP değişince otomatik güncellenir (5 dk'da bir)</div></div>
+            <label class="sw"><input type="checkbox" id="sw-ddns"><div class="sw-track"></div></label>
+          </div>
+          <div id="ddns-fields">
+            <div class="s-label">Subdomain <span style="color:var(--sub);font-weight:400">— örn: <b>benimproxy</b> → benimproxy.duckdns.org</span></div>
+            <input type="text" id="inp-ddns-sub" class="s-input" placeholder="benimproxy" autocomplete="off" spellcheck="false">
+            <div class="s-label" style="margin-top:8px">Token <span style="color:var(--sub);font-weight:400">— <a href="https://www.duckdns.org" target="_blank" style="color:var(--accent);text-decoration:none">duckdns.org</a>'dan alın</span></div>
+            <input type="text" id="inp-ddns-token" class="s-input" placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx" autocomplete="off" spellcheck="false">
+            <button class="mob-refresh-btn" style="margin-top:10px" onclick="testDDNS(this)">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
+              Bağlantıyı Test Et
+            </button>
+            <div id="ddns-test-result" style="font-size:11px;margin-top:8px;display:none;padding:6px 8px;border-radius:6px"></div>
+          </div>
+        </div>
         <button class="save-btn" onclick="saveSettings()">Ayarları Kaydet</button>
       </div>
 
@@ -860,6 +878,14 @@ window.addEventListener('DOMContentLoaded', function() {
 
           <div class="card">
             <div class="card-title">Proxy Bağlantı Adresi</div>
+            <div id="mob-ddns-badge" style="display:none;font-size:10px;color:#22c55e;margin-bottom:6px;background:rgba(34,197,94,.08);border-radius:4px;padding:4px 8px">
+              <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="vertical-align:middle;margin-right:3px"><polyline points="20 6 9 17 4 12"/></svg>
+              DuckDNS aktif — <span id="mob-ddns-hostname"></span>
+            </div>
+            <div id="mob-noddns-hint" style="font-size:10px;color:#f59e0b;margin-bottom:6px;background:rgba(245,158,11,.08);border-radius:4px;padding:4px 8px">
+              <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="vertical-align:middle;margin-right:3px"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+              IP değişirse bağlantı kopar — Ayarlar'dan DuckDNS kur
+            </div>
             <div class="url-row">
               <input class="url-in" id="inp-mob-proxy-url" value="—" readonly>
               <button class="cp-btn" onclick="copyAnim(this, document.getElementById('inp-mob-proxy-url').value)">Kopyala</button>
@@ -1134,8 +1160,36 @@ function saveSettings() {
     proxy_auto_start: !!(document.getElementById('sw-proxy-autostart') || {}).checked,
     proxy_port: parseInt((document.getElementById('inp-proxy-port') || {value:'8888'}).value) || 8888,
     pac_port: parseInt((document.getElementById('inp-pac-port') || {value:'8080'}).value) || 8080,
+    ddns_enabled: !!(document.getElementById('sw-ddns') || {}).checked,
+    ddns_subdomain: ((document.getElementById('inp-ddns-sub') || {value:''}).value || '').trim().toLowerCase(),
+    ddns_token: ((document.getElementById('inp-ddns-token') || {value:''}).value || '').trim(),
   };
   window.goMessage(JSON.stringify({type:'saveSettings', payload: cfg}));
+}
+
+function testDDNS(btn) {
+  var res = document.getElementById('ddns-test-result');
+  if (btn) { btn.disabled = true; btn.textContent = 'Test ediliyor…'; }
+  if (res) { res.style.display = 'none'; }
+  window.goMessage(JSON.stringify({type:'testDDNS'}));
+}
+
+function ddnsTestResult(d) {
+  var res = document.getElementById('ddns-test-result');
+  var btn = document.querySelector('[onclick="testDDNS(this)"]');
+  if (btn) { btn.disabled = false; btn.innerHTML = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg> Bağlantıyı Test Et'; }
+  if (!res) return;
+  if (d.error) {
+    res.style.display = 'block';
+    res.style.background = 'rgba(239,68,68,.1)';
+    res.style.color = '#ef4444';
+    res.textContent = '✗ Hata: ' + d.error;
+  } else {
+    res.style.display = 'block';
+    res.style.background = 'rgba(34,197,94,.1)';
+    res.style.color = '#22c55e';
+    res.textContent = '✔ ' + d.hostname + ' → ' + d.lastIP + ' (' + (d.lastAt || 'az önce') + ')';
+  }
 }
 
 // Clear logs
@@ -1159,20 +1213,33 @@ function refreshMobileData() {
 
 function updateMobileData(d) {
   var ip = d.publicIP || '';
+  var displayAddr = d.displayAddr || ip;
+  var ddns = d.ddns || {};
+  var ddnsActive = !!(ddns.enabled && ddns.hostname);
+
   var ipEl  = document.getElementById('mob-public-ip');
   var stEl  = document.getElementById('mob-ip-status');
   var urlEl = document.getElementById('inp-mob-proxy-url');
   var qrImg = document.getElementById('mob-qrc');
   var qrWrap= document.getElementById('mob-qr-wrap');
   var localHint = document.getElementById('mob-local-ip-hint');
+  var ddnsBadge = document.getElementById('mob-ddns-badge');
+  var noddnsHint = document.getElementById('mob-noddns-hint');
+  var ddnsHostnameEl = document.getElementById('mob-ddns-hostname');
 
   if (ipEl) ipEl.textContent = ip || 'Alınamadı';
   if (stEl) stEl.textContent = ip ? 'Port 8888\'i bu IP üzerinden yönlendirin' : 'IP alınamadı — internet bağlantısını kontrol edin';
-  if (urlEl) urlEl.value = ip ? d.proxyUrl || (ip + ':' + (d.proxyPort || 8888)) : '—';
+  if (urlEl) urlEl.value = displayAddr ? d.proxyUrl || (displayAddr + ':' + (d.proxyPort || 8888)) : '—';
 
+  // DDNS badge / uyarı göster
+  if (ddnsBadge) ddnsBadge.style.display = ddnsActive ? 'block' : 'none';
+  if (noddnsHint) noddnsHint.style.display = ddnsActive ? 'none' : 'block';
+  if (ddnsHostnameEl && ddns.hostname) ddnsHostnameEl.textContent = ddns.hostname;
+
+  // Kurulum kılavuzlarında adres güncelle
   ['mob-android-ip','mob-ios-ip','mob-win-ip'].forEach(function(id) {
     var el = document.getElementById(id);
-    if (el) el.textContent = ip || 'Genel IP';
+    if (el) el.textContent = displayAddr || 'Genel IP / DuckDNS hostname';
   });
 
   if (localHint && window._localIP) localHint.textContent = window._localIP;
@@ -1530,6 +1597,12 @@ function loadSettings(cfg) {
   }
   var savedTheme = cfg.theme||cfg.Theme;
   if (savedTheme && savedTheme !== _currentTheme) applyTheme(savedTheme);
+  var swDDNS = document.getElementById('sw-ddns');
+  if (swDDNS) swDDNS.checked = !!(cfg.ddns_enabled||cfg.DDNSEnabled);
+  var ddnsSub = document.getElementById('inp-ddns-sub');
+  if (ddnsSub) ddnsSub.value = cfg.ddns_subdomain||cfg.DDNSSubdomain||'';
+  var ddnsToken = document.getElementById('inp-ddns-token');
+  if (ddnsToken) ddnsToken.value = cfg.ddns_token||cfg.DDNSToken||'';
 }
 
 var _updateURL = '';

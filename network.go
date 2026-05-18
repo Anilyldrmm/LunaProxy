@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/exec"
 	"strings"
+	"sync"
 	"syscall"
 	"time"
 )
@@ -116,4 +117,137 @@ func writeTempPNG(data []byte) (path string, cleanup func()) {
 	f.Write(data)
 	f.Close()
 	return f.Name(), func() { os.Remove(f.Name()) }
+}
+
+// ── DuckDNS entegrasyonu ──────────────────────────────────────────────────────
+
+var (
+	ddnsMu        sync.Mutex
+	ddnsLastIP    string
+	ddnsLastAt    time.Time
+	ddnsLastError string
+)
+
+// DDNSStatus — DDNS durumunu dışarıya açar.
+type DDNSStatus struct {
+	Enabled  bool   `json:"enabled"`
+	Hostname string `json:"hostname"`
+	LastIP   string `json:"lastIP"`
+	LastAt   string `json:"lastAt"`
+	Error    string `json:"error"`
+}
+
+func getDDNSStatus() DDNSStatus {
+	c := getConfig()
+	ddnsMu.Lock()
+	defer ddnsMu.Unlock()
+	hostname := ""
+	if c.DDNSSubdomain != "" {
+		hostname = c.DDNSSubdomain + ".duckdns.org"
+	}
+	lastAt := ""
+	if !ddnsLastAt.IsZero() {
+		lastAt = ddnsLastAt.Format("15:04:05")
+	}
+	return DDNSStatus{
+		Enabled:  c.DDNSEnabled,
+		Hostname: hostname,
+		LastIP:   ddnsLastIP,
+		LastAt:   lastAt,
+		Error:    ddnsLastError,
+	}
+}
+
+// updateDDNS — DuckDNS API'ye IP güncellemesi gönderir.
+func updateDDNS(subdomain, token, ip string) error {
+	url := fmt.Sprintf("https://www.duckdns.org/update?domains=%s&token=%s&ip=%s&verbose=false",
+		subdomain, token, ip)
+	c := &http.Client{Timeout: 10 * time.Second}
+	resp, err := c.Get(url)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	body, _ := io.ReadAll(resp.Body)
+	result := strings.TrimSpace(string(body))
+	if result != "OK" {
+		return fmt.Errorf("duckdns yanıtı: %s", result)
+	}
+	return nil
+}
+
+// ddnsTick — IP değiştiyse DuckDNS'i günceller. Değişmadıysa atlar.
+func ddnsTick() {
+	c := getConfig()
+	if !c.DDNSEnabled || c.DDNSSubdomain == "" || c.DDNSToken == "" {
+		return
+	}
+	ip := fetchPublicIP()
+	if ip == "" {
+		ddnsMu.Lock()
+		ddnsLastError = "genel IP alınamadı"
+		ddnsMu.Unlock()
+		return
+	}
+	ddnsMu.Lock()
+	lastIP := ddnsLastIP
+	ddnsMu.Unlock()
+	if ip == lastIP {
+		return
+	}
+	if err := updateDDNS(c.DDNSSubdomain, c.DDNSToken, ip); err != nil {
+		ddnsMu.Lock()
+		ddnsLastError = err.Error()
+		ddnsMu.Unlock()
+		logWarn("DDNS güncelleme hatası: " + err.Error())
+		return
+	}
+	ddnsMu.Lock()
+	ddnsLastIP = ip
+	ddnsLastAt = time.Now()
+	ddnsLastError = ""
+	ddnsMu.Unlock()
+	logInfo(fmt.Sprintf("DDNS güncellendi: %s.duckdns.org → %s", c.DDNSSubdomain, ip))
+}
+
+// ddnsTickForce — IP değişmemiş olsa bile DuckDNS'i günceller (test için).
+func ddnsTickForce() {
+	c := getConfig()
+	if c.DDNSSubdomain == "" || c.DDNSToken == "" {
+		ddnsMu.Lock()
+		ddnsLastError = "subdomain veya token eksik"
+		ddnsMu.Unlock()
+		return
+	}
+	ip := fetchPublicIP()
+	if ip == "" {
+		ddnsMu.Lock()
+		ddnsLastError = "genel IP alınamadı"
+		ddnsMu.Unlock()
+		return
+	}
+	if err := updateDDNS(c.DDNSSubdomain, c.DDNSToken, ip); err != nil {
+		ddnsMu.Lock()
+		ddnsLastError = err.Error()
+		ddnsMu.Unlock()
+		return
+	}
+	ddnsMu.Lock()
+	ddnsLastIP = ip
+	ddnsLastAt = time.Now()
+	ddnsLastError = ""
+	ddnsMu.Unlock()
+	logInfo(fmt.Sprintf("DDNS test güncellendi: %s.duckdns.org → %s", c.DDNSSubdomain, ip))
+}
+
+// startDDNSUpdater — arka planda 5 dakikada bir IP değişimini kontrol eder.
+func startDDNSUpdater() {
+	go func() {
+		ddnsTick()
+		ticker := time.NewTicker(5 * time.Minute)
+		defer ticker.Stop()
+		for range ticker.C {
+			ddnsTick()
+		}
+	}()
 }
