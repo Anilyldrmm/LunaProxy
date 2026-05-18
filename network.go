@@ -2,6 +2,7 @@
 
 import (
 	"fmt"
+	"io"
 	"net"
 	"net/http"
 	"os"
@@ -73,6 +74,32 @@ func hiddenRun(name string, args ...string) {
 		CreationFlags: 0x08000000, // CREATE_NO_WINDOW
 	}
 	cmd.Run()
+}
+
+// fetchPublicIP — harici servislerden genel IP adresini alır.
+func fetchPublicIP() string {
+	services := []string{
+		"https://api.ipify.org",
+		"https://ifconfig.me/ip",
+		"https://checkip.amazonaws.com",
+	}
+	c := &http.Client{Timeout: 5 * time.Second}
+	for _, svc := range services {
+		resp, err := c.Get(svc)
+		if err != nil {
+			continue
+		}
+		body, err := io.ReadAll(resp.Body)
+		resp.Body.Close()
+		if err != nil || resp.StatusCode != 200 {
+			continue
+		}
+		ip := strings.TrimSpace(string(body))
+		if net.ParseIP(ip) != nil {
+			return ip
+		}
+	}
+	return ""
 }
 
 // openBrowser — PAC QR fallback.

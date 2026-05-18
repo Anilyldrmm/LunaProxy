@@ -435,6 +435,43 @@ body {
 .instruct[open] summary::after { transform:rotate(90deg); }
 .instruct-body { padding:10px 14px 12px; font-size:12px; color:var(--sub); line-height:1.7; border-top:1px solid var(--border); }
 
+/* ── MOBILE DATA tab ── */
+.mob-tabs { display:flex; gap:4px; margin-bottom:12px; }
+.mob-tab {
+  flex:1; padding:7px 4px; text-align:center; font-size:11px; font-weight:600;
+  color:var(--sub); background:var(--surface2); border-radius:8px;
+  cursor:pointer; border:1px solid var(--border); transition:.15s;
+}
+.mob-tab.active { background:var(--a-15); color:var(--accent-bright); border-color:var(--a-35); }
+.mob-tab:hover:not(.active) { background:var(--a-08); color:var(--text); }
+.mob-tabcontent { display:none; }
+.mob-tabcontent.active { display:block; }
+.mob-ip-box {
+  font-size:16px; font-weight:700; font-family:Consolas,monospace;
+  color:var(--accent-bright); text-align:center; padding:10px 0 6px;
+}
+.mob-ip-sub { font-size:10px; color:var(--sub); text-align:center; margin-bottom:10px; }
+.mob-warn {
+  background:rgba(245,158,11,.08); border:1px solid rgba(245,158,11,.25);
+  border-radius:8px; padding:9px 12px; font-size:11px; color:#F59E0B;
+  line-height:1.6; margin-bottom:10px;
+}
+.mob-refresh-btn {
+  display:flex; align-items:center; gap:6px; margin:0 auto 10px;
+  padding:7px 18px; border-radius:8px; border:1px solid var(--a-35);
+  background:var(--a-10); color:var(--accent-bright); font-size:12px;
+  font-weight:600; cursor:pointer; transition:.15s; font-family:inherit;
+}
+.mob-refresh-btn:hover { background:var(--a-20); }
+.mob-step { display:flex; gap:8px; align-items:flex-start; padding:6px 0; font-size:12px; }
+.mob-step-num {
+  flex-shrink:0; width:18px; height:18px; border-radius:50%;
+  background:var(--a-20); color:var(--accent-bright);
+  font-size:10px; font-weight:700; display:flex; align-items:center; justify-content:center;
+}
+.mob-step-text { color:var(--sub); line-height:1.6; }
+.mob-step-text b { color:var(--text); }
+
 /* ── ROUTER panel ── */
 .rt-form { display:flex; flex-direction:column; gap:8px; margin-bottom:14px; }
 .rt-row { display:flex; gap:8px; }
@@ -767,31 +804,112 @@ window.addEventListener('DOMContentLoaded', function() {
 
       <!-- MOBILE -->
       <div class="panel" id="panel-mobile">
-        <div class="card">
-          <div class="card-title">Router PAC URL <span style="font-size:10px;color:#22c55e;font-weight:400">(Önerilen — PC kapalıyken de çalışır)</span></div>
-          <div class="url-row">
-            <input class="url-in" id="inp-router-url" value="http://192.168.1.1:8090/proxy.pac" readonly>
-            <button class="cp-btn" onclick="copyAnim(this, this.previousElementSibling.value)">Kopyala</button>
+        <div class="mob-tabs">
+          <div class="mob-tab active" onclick="mobTab(this,'wifi')">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:middle;margin-right:4px"><path d="M5 12.55a11 11 0 0 1 14.08 0"/><path d="M1.42 9a16 16 0 0 1 21.16 0"/><path d="M8.53 16.11a6 6 0 0 1 6.95 0"/><circle cx="12" cy="20" r="1" fill="currentColor" stroke="none"/></svg>Wi-Fi Ağı
           </div>
-          <div class="card-title" style="margin-top:10px">PC PAC URL <span style="font-size:10px;color:#6B6490;font-weight:400">(Sadece PC açıkken)</span></div>
-          <div class="url-row">
-            <input class="url-in" id="inp-pc-url" value="http://192.168.1.41:8080/proxy.pac" readonly>
-            <button class="cp-btn" onclick="copyAnim(this, this.previousElementSibling.value)">Kopyala</button>
+          <div class="mob-tab" onclick="mobTab(this,'data')">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:middle;margin-right:4px"><rect x="5" y="2" width="14" height="20" rx="2"/><line x1="12" y1="6" x2="12" y2="6" stroke-width="3" stroke-linecap="round"/><line x1="12" y1="10" x2="12" y2="14"/></svg>Mobil Veri
           </div>
         </div>
-        <div class="qr-wrap"><canvas id="qrc" width="160" height="160" class="qr-box"></canvas></div>
-        <details class="instruct">
-          <summary><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="5" y="2" width="14" height="20" rx="2"/></svg>Android kurulum</summary>
-          <div class="instruct-body">Wi-Fi ayarları → Ağa uzun bas → Ağı değiştir → Gelişmiş → Proxy: Otomatik → URL'yi gir.</div>
-        </details>
-        <details class="instruct">
-          <summary><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2z"/></svg>iOS kurulum</summary>
-          <div class="instruct-body">Ayarlar → Wi-Fi → Ağa tıkla → HTTP Proxy: Otomatik → URL'yi gir.</div>
-        </details>
-        <details class="instruct">
-          <summary><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg>Windows kurulum</summary>
-          <div class="instruct-body">Ayarlar → Ağ ve İnternet → Proxy → Kurulum betiği kullan → URL'yi gir.</div>
-        </details>
+
+        <!-- Wi-Fi sekmesi -->
+        <div class="mob-tabcontent active" id="mobt-wifi">
+          <div class="card">
+            <div class="card-title">Router PAC URL <span style="font-size:10px;color:#22c55e;font-weight:400">(Önerilen — PC kapalıyken de çalışır)</span></div>
+            <div class="url-row">
+              <input class="url-in" id="inp-router-url" value="http://192.168.1.1:8090/proxy.pac" readonly>
+              <button class="cp-btn" onclick="copyAnim(this, this.previousElementSibling.value)">Kopyala</button>
+            </div>
+            <div class="card-title" style="margin-top:10px">PC PAC URL <span style="font-size:10px;color:#6B6490;font-weight:400">(Sadece PC açıkken)</span></div>
+            <div class="url-row">
+              <input class="url-in" id="inp-pc-url" value="http://192.168.1.41:8080/proxy.pac" readonly>
+              <button class="cp-btn" onclick="copyAnim(this, this.previousElementSibling.value)">Kopyala</button>
+            </div>
+          </div>
+          <div class="qr-wrap"><canvas id="qrc" width="160" height="160" class="qr-box"></canvas></div>
+          <details class="instruct">
+            <summary><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="5" y="2" width="14" height="20" rx="2"/></svg>Android kurulum</summary>
+            <div class="instruct-body">Wi-Fi ayarları → Ağa uzun bas → Ağı değiştir → Gelişmiş → Proxy: Otomatik → URL'yi gir.</div>
+          </details>
+          <details class="instruct">
+            <summary><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2z"/></svg>iOS kurulum</summary>
+            <div class="instruct-body">Ayarlar → Wi-Fi → Ağa tıkla → HTTP Proxy: Otomatik → URL'yi gir.</div>
+          </details>
+          <details class="instruct">
+            <summary><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg>Windows kurulum</summary>
+            <div class="instruct-body">Ayarlar → Ağ ve İnternet → Proxy → Kurulum betiği kullan → URL'yi gir.</div>
+          </details>
+        </div>
+
+        <!-- Mobil Veri sekmesi -->
+        <div class="mob-tabcontent" id="mobt-data">
+          <div class="mob-warn">
+            <b>⚠ Port yönlendirme gereklidir.</b> Modem/router ayarlarından <b>8888</b> numaralı TCP portunu bu PC'ye yönlendirmeniz gerekir. Proxy internete açık olacağından güvenilir ağlarda kullanın.
+          </div>
+
+          <div class="card" style="text-align:center">
+            <div class="card-title">Genel IP Adresi</div>
+            <div class="mob-ip-box" id="mob-public-ip">—</div>
+            <div class="mob-ip-sub" id="mob-ip-status">IP alınıyor…</div>
+            <button class="mob-refresh-btn" onclick="refreshMobileData()">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
+              Yenile
+            </button>
+          </div>
+
+          <div class="card">
+            <div class="card-title">Proxy Bağlantı Adresi</div>
+            <div class="url-row">
+              <input class="url-in" id="inp-mob-proxy-url" value="—" readonly>
+              <button class="cp-btn" onclick="copyAnim(this, document.getElementById('inp-mob-proxy-url').value)">Kopyala</button>
+            </div>
+            <div style="font-size:10px;color:var(--sub);line-height:1.6">
+              Bu adresi proxy uygulamasında <b style="color:var(--text)">Sunucu</b> olarak girin, <b style="color:var(--text)">Port: 8888</b>.
+            </div>
+          </div>
+
+          <div class="qr-wrap" id="mob-qr-wrap" style="display:none">
+            <img id="mob-qrc" style="width:160px;height:160px;border-radius:12px;box-shadow:0 0 0 1px var(--a-20),0 8px 32px rgba(0,0,0,.5)" alt="QR">
+          </div>
+
+          <div class="card">
+            <div class="card-title">Port Yönlendirme Kurulumu</div>
+            <div class="mob-step"><div class="mob-step-num">1</div><div class="mob-step-text">Modem/router yönetim paneline girin (genellikle <b>192.168.1.1</b>).</div></div>
+            <div class="mob-step"><div class="mob-step-num">2</div><div class="mob-step-text"><b>Port Yönlendirme</b> (Port Forwarding / Virtual Server) bölümüne gidin.</div></div>
+            <div class="mob-step"><div class="mob-step-num">3</div><div class="mob-step-text">Harici Port: <b>8888</b> → Dahili IP: <b id="mob-local-ip-hint">PC IP'niz</b> → Dahili Port: <b>8888</b> → Protokol: <b>TCP</b>.</div></div>
+            <div class="mob-step"><div class="mob-step-num">4</div><div class="mob-step-text">Kaydedin ve telefonda aşağıdaki proxy uygulamasını kullanın.</div></div>
+          </div>
+
+          <div class="card">
+            <div class="card-title">Telefonda Kurulum</div>
+            <details class="instruct" style="margin-bottom:6px">
+              <summary><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="5" y="2" width="14" height="20" rx="2"/></svg>Android — Every Proxy uygulaması</summary>
+              <div class="instruct-body">
+                1. Play Store'dan <b>Every Proxy</b> uygulamasını indirin.<br>
+                2. + tuşuna basın → <b>HTTP Proxy</b> seçin.<br>
+                3. Sunucu: <b id="mob-android-ip">Genel IP</b>, Port: <b>8888</b>.<br>
+                4. Başlat — tüm mobil veri trafiği proxy üzerinden geçer.
+              </div>
+            </details>
+            <details class="instruct" style="margin-bottom:6px">
+              <summary><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2z"/></svg>iOS — Shadowrocket / Quantumult</summary>
+              <div class="instruct-body">
+                1. App Store'dan <b>Shadowrocket</b> veya <b>Quantumult X</b> indirin.<br>
+                2. Yeni sunucu ekleyin → Tip: <b>HTTP</b>.<br>
+                3. Adres: <b id="mob-ios-ip">Genel IP</b>, Port: <b>8888</b>.<br>
+                4. Bağlanın — VPN simgesi görünür.
+              </div>
+            </details>
+            <details class="instruct">
+              <summary><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg>Windows — Sistem Proxy Ayarı</summary>
+              <div class="instruct-body">
+                Ayarlar → Ağ ve İnternet → Proxy → <b>El ile proxy kurulumu</b>.<br>
+                Adres: <b id="mob-win-ip">Genel IP</b>, Port: <b>8888</b> → Kaydet.
+              </div>
+            </details>
+          </div>
+        </div>
       </div>
 
       <!-- ROUTER -->
@@ -951,7 +1069,10 @@ function go(el) {
   el.classList.add('active');
   var panel = el.dataset.p;
   document.getElementById('panel-'+panel).classList.add('active');
-  if (panel === 'mobile') window.goMessage(JSON.stringify({type:'requestQR'}));
+  if (panel === 'mobile') {
+    window.goMessage(JSON.stringify({type:'requestQR'}));
+    window.goMessage(JSON.stringify({type:'requestMobileData'}));
+  }
   if (panel === 'settings') window.goMessage(JSON.stringify({type:'requestSettings'}));
   if (panel === 'router') window.goMessage(JSON.stringify({type:'requestRouterDefaults'}));
 }
@@ -1019,6 +1140,52 @@ function saveSettings() {
 
 // Clear logs
 function clearLogs() { window.goMessage(JSON.stringify({type:'clearLogs'})); }
+
+function mobTab(el, id) {
+  el.closest('.mob-tabs').querySelectorAll('.mob-tab').forEach(function(t){t.classList.remove('active');});
+  el.classList.add('active');
+  document.querySelectorAll('.mob-tabcontent').forEach(function(c){c.classList.remove('active');});
+  document.getElementById('mobt-'+id).classList.add('active');
+  if (id === 'data') window.goMessage(JSON.stringify({type:'requestMobileData'}));
+}
+
+function refreshMobileData() {
+  var ipEl = document.getElementById('mob-public-ip');
+  var stEl = document.getElementById('mob-ip-status');
+  if (ipEl) ipEl.textContent = '…';
+  if (stEl) stEl.textContent = 'IP alınıyor…';
+  window.goMessage(JSON.stringify({type:'requestMobileData'}));
+}
+
+function updateMobileData(d) {
+  var ip = d.publicIP || '';
+  var ipEl  = document.getElementById('mob-public-ip');
+  var stEl  = document.getElementById('mob-ip-status');
+  var urlEl = document.getElementById('inp-mob-proxy-url');
+  var qrImg = document.getElementById('mob-qrc');
+  var qrWrap= document.getElementById('mob-qr-wrap');
+  var localHint = document.getElementById('mob-local-ip-hint');
+
+  if (ipEl) ipEl.textContent = ip || 'Alınamadı';
+  if (stEl) stEl.textContent = ip ? 'Port 8888\'i bu IP üzerinden yönlendirin' : 'IP alınamadı — internet bağlantısını kontrol edin';
+  if (urlEl) urlEl.value = ip ? d.proxyUrl || (ip + ':' + (d.proxyPort || 8888)) : '—';
+
+  ['mob-android-ip','mob-ios-ip','mob-win-ip'].forEach(function(id) {
+    var el = document.getElementById(id);
+    if (el) el.textContent = ip || 'Genel IP';
+  });
+
+  if (localHint && window._localIP) localHint.textContent = window._localIP;
+
+  if (qrImg && qrWrap) {
+    if (d.qrBase64) {
+      qrImg.src = 'data:image/png;base64,' + d.qrBase64;
+      qrWrap.style.display = 'flex';
+    } else {
+      qrWrap.style.display = 'none';
+    }
+  }
+}
 
 function rtTab(el, id) {
   el.closest('.rt-tabs').querySelectorAll('.rt-tab').forEach(function(t){t.classList.remove('active');});
@@ -1226,6 +1393,9 @@ function updateStatus(s) {
   document.getElementById('slabel').className = 'status-label' + (running ? ' on' : '');
   var sip = document.getElementById('sip');
   if (sip) { sip.style.opacity = running ? '1' : '0'; sip.textContent = (s.LocalIP||s.localIP||'') + ' : ' + (s.ProxyPort||s.proxyPort||''); }
+  window._localIP = s.LocalIP||s.localIP||'';
+  var lh = document.getElementById('mob-local-ip-hint');
+  if (lh && window._localIP) lh.textContent = window._localIP;
   var ring = document.getElementById('ring');
   if (ring) ring.className = 'logo-ring' + (running ? ' on' : '');
   var lbox = document.getElementById('lbox');

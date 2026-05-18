@@ -157,6 +157,29 @@ func handleIPCMessage(data string) {
 		json.Unmarshal(msg.Payload, &p) //nolint:errcheck
 		pushISPSuggestion(p.ISP)
 
+	case "requestMobileData":
+		go func() {
+			c := getConfig()
+			ip := fetchPublicIP()
+			proxyURL := ""
+			if ip != "" {
+				proxyURL = fmt.Sprintf("http://%s:%d", ip, c.ProxyPort)
+			}
+			var qrB64 string
+			if proxyURL != "" {
+				if png, err := qrcode.Encode(proxyURL, qrcode.High, 200); err == nil {
+					qrB64 = base64.StdEncoding.EncodeToString(png)
+				}
+			}
+			data, _ := json.Marshal(map[string]interface{}{
+				"publicIP":  ip,
+				"proxyPort": c.ProxyPort,
+				"proxyUrl":  proxyURL,
+				"qrBase64":  qrB64,
+			})
+			evalJS(fmt.Sprintf(`updateMobileData(%s)`, data))
+		}()
+
 	case "requestRouterDefaults":
 		c := getConfig()
 		gateway := guessGatewayIP(g.localIP)
