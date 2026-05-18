@@ -20,10 +20,12 @@ type TailscaleStatus struct {
 }
 
 type TailscalePeer struct {
-	Name   string `json:"name"`
-	IP     string `json:"ip"`
-	OS     string `json:"os"`
-	Online bool   `json:"online"`
+	Name    string `json:"name"`
+	IP      string `json:"ip"`
+	OS      string `json:"os"`
+	Online  bool   `json:"online"`
+	RxBytes int64  `json:"rxBytes"`
+	TxBytes int64  `json:"txBytes"`
 }
 
 var (
@@ -77,6 +79,8 @@ func fetchTailscaleStatus() TailscaleStatus {
 			TailscaleIPs []string `json:"TailscaleIPs"`
 			OS           string   `json:"OS"`
 			Online       bool     `json:"Online"`
+			RxBytes      int64    `json:"RxBytes"`
+			TxBytes      int64    `json:"TxBytes"`
 		} `json:"Peer"`
 	}
 	if err := json.Unmarshal(out, &raw); err != nil {
@@ -108,10 +112,12 @@ func fetchTailscaleStatus() TailscaleStatus {
 			}
 		}
 		peers = append(peers, TailscalePeer{
-			Name:   name,
-			IP:     ip,
-			OS:     p.OS,
-			Online: p.Online,
+			Name:    name,
+			IP:      ip,
+			OS:      p.OS,
+			Online:  p.Online,
+			RxBytes: p.RxBytes,
+			TxBytes: p.TxBytes,
 		})
 	}
 

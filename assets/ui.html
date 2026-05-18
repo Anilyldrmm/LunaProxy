@@ -1186,10 +1186,16 @@ function updateTailscaleStatus(ts) {
       var ip = p.ip || p.IP || '';
       var online = p.online || p.Online;
       var os = p.os || p.OS || '';
+      var rx = p.rxBytes || p.RxBytes || 0;
+      var tx = p.txBytes || p.TxBytes || 0;
+      var dot = online ? 'var(--green)' : 'var(--sub)';
+      var dataStr = (rx || tx) ? ('↓' + fmtB(rx) + ' ↑' + fmtB(tx)) : '';
       return '<div style="display:flex;align-items:center;gap:8px;padding:5px 0;border-top:1px solid var(--border)">'
-        + '<div class="sdot' + (online ? ' ok' : '') + '" style="width:6px;height:6px;border-radius:50%;background:' + (online ? 'var(--green)' : 'var(--sub)') + ';flex-shrink:0"></div>'
+        + '<div style="width:6px;height:6px;border-radius:50%;background:' + dot + ';flex-shrink:0"></div>'
         + '<div style="flex:1"><div style="font-size:12px;color:var(--text)">' + name + '</div>'
-        + '<div style="font-size:10px;color:var(--sub)">' + ip + (os ? ' · ' + os : '') + '</div></div></div>';
+        + '<div style="font-size:10px;color:var(--sub)">' + ip + (os ? ' · ' + os : '') + '</div></div>'
+        + (dataStr ? '<div style="font-size:10px;color:var(--sub);text-align:right">' + dataStr + '</div>' : '')
+        + '</div>';
     }).join('');
     if (peersWrap) peersWrap.style.display = '';
   } else if (peersWrap) {
@@ -1248,11 +1254,16 @@ function updateMobileData(d) {
       var ip = p.ip || p.IP || '';
       var online = p.online || p.Online;
       var os = p.os || p.OS || '';
+      var rx = p.rxBytes || p.RxBytes || 0;
+      var tx = p.txBytes || p.TxBytes || 0;
       var dot = online ? '#22c55e' : 'var(--sub)';
+      var dataStr = (rx || tx) ? ('↓' + fmtB(rx) + ' ↑' + fmtB(tx)) : '';
       return '<div style="display:flex;align-items:center;gap:8px;padding:5px 0;border-top:1px solid var(--border)">'
         + '<div style="width:7px;height:7px;border-radius:50%;background:' + dot + ';flex-shrink:0"></div>'
         + '<div style="flex:1"><div style="font-size:12px;color:var(--text)">' + name + '</div>'
-        + '<div style="font-size:10px;color:var(--sub)">' + ip + (os ? ' · ' + os : '') + '</div></div></div>';
+        + '<div style="font-size:10px;color:var(--sub)">' + ip + (os ? ' · ' + os : '') + '</div></div>'
+        + (dataStr ? '<div style="font-size:10px;color:var(--sub);text-align:right;white-space:nowrap">' + dataStr + '</div>' : '')
+        + '</div>';
     }).join('');
     if (peersCard) peersCard.style.display = '';
   } else {
