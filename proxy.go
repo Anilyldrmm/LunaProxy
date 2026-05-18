@@ -51,7 +51,11 @@ func resolveHostname(ip string) {
 	// DNS PTR (Windows cihazları, bazı Android)
 	if name == "" {
 		if ns, err := net.LookupAddr(ip); err == nil && len(ns) > 0 {
-			name = strings.TrimSuffix(ns[0], ".")
+			candidate := strings.TrimSuffix(ns[0], ".")
+			// "localhost" ve anlamsız genel isimler geçersiz say
+			if candidate != "localhost" && candidate != "localhost.localdomain" && candidate != ip {
+				name = candidate
+			}
 		}
 	}
 	// mDNS/Bonjour unicast (iPhone, macOS, modern Android)
@@ -83,21 +87,44 @@ func decDeviceConn(ip string) {
 }
 
 func GetDevices() []DeviceInfo {
+	seen := map[string]bool{}
 	var list []DeviceInfo
+
 	devices.Range(func(k, v any) bool {
+		ip := k.(string)
+		seen[ip] = true
 		e := v.(*deviceEntry)
 		hn := ""
 		if h := e.hostname.Load(); h != nil {
 			hn = h.(string)
 		}
 		list = append(list, DeviceInfo{
-			IP:          k.(string),
+			IP:          ip,
 			Bytes:       atomic.LoadInt64(&e.Bytes),
 			ActiveConns: atomic.LoadInt64(&e.ActiveConns),
 			Hostname:    hn,
 		})
 		return true
 	})
+
+	// Tailscale peer'larını ekle — proxy'den geçmeyenler (exit node kullanıcıları)
+	ts := getTailscaleStatus()
+	for _, p := range ts.Peers {
+		if p.IP == "" || seen[p.IP] {
+			continue
+		}
+		// Hiç veri yok ve çevrimdışı → gösterme
+		if !p.Online && p.RxBytes == 0 && p.TxBytes == 0 {
+			continue
+		}
+		list = append(list, DeviceInfo{
+			IP:          p.IP,
+			Bytes:       p.RxBytes + p.TxBytes,
+			ActiveConns: 0,
+			Hostname:    p.Name,
+		})
+	}
+
 	return list
 }
 
