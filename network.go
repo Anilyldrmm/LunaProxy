@@ -16,7 +16,7 @@ import (
 // /pac (yeni kurulum) veya /proxy.pac (eski/Keenetic kurulum) sırasıyla dener.
 func probeRouterPACPath(gateway string) string {
 	c := &http.Client{Timeout: 3 * time.Second}
-	for _, path := range []string{"/pac", "/proxy.pac"} {
+	for _, path := range []string{"/proxy.pac", "/pac"} {
 		resp, err := c.Get(fmt.Sprintf("http://%s:8090%s", gateway, path))
 		if err == nil {
 			resp.Body.Close()
@@ -25,7 +25,7 @@ func probeRouterPACPath(gateway string) string {
 			}
 		}
 	}
-	return "/pac"
+	return "/proxy.pac"
 }
 
 // guessGatewayIP — local IP'den varsayılan gateway'i tahmin eder.

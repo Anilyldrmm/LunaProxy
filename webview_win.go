@@ -198,20 +198,22 @@ func wvSetTaskbarIcon(hwnd uintptr) {
 }
 
 // showWindow — pencereyi göster ve öne getir (tray'den çağrılır).
-// Minimize ise restore eder; SW_SHOW minimize pencereyi açmaz.
+// UI thread'inde çalışmalı; Dispatch ile WebView2 message loop'una gönderilir.
 func showWindow() {
 	if wv == nil {
 		return
 	}
-	hwnd := uintptr(wv.Window())
-	iconic, _, _ := wvProcIsIconic.Call(hwnd)
-	if iconic != 0 {
-		wvProcShowWindow.Call(hwnd, wvSwRestore)
-	} else {
-		wvProcShowWindow.Call(hwnd, wvSwShow)
-	}
-	wvProcBringWindowToTop.Call(hwnd)
-	wvProcSetForegroundWindow.Call(hwnd)
+	wv.Dispatch(func() {
+		hwnd := uintptr(wv.Window())
+		iconic, _, _ := wvProcIsIconic.Call(hwnd)
+		if iconic != 0 {
+			wvProcShowWindow.Call(hwnd, wvSwRestore)
+		} else {
+			wvProcShowWindow.Call(hwnd, wvSwShow)
+		}
+		wvProcBringWindowToTop.Call(hwnd)
+		wvProcSetForegroundWindow.Call(hwnd)
+	})
 }
 
 // bringExistingToFront — başka bir process'ten çalışan örneği öne getirir.
@@ -233,8 +235,10 @@ func hideWindow() {
 	if wv == nil {
 		return
 	}
-	hwnd := uintptr(wv.Window())
-	wvProcShowWindow.Call(hwnd, wvSwHide)
+	wv.Dispatch(func() {
+		hwnd := uintptr(wv.Window())
+		wvProcShowWindow.Call(hwnd, wvSwHide)
+	})
 }
 
 // evalJS — WebView thread'inde güvenli JS eval.

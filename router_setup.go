@@ -331,14 +331,14 @@ func routerInstallKeenetic(client *ssh.Client, cfg RouterSetupCfg, progress func
 	progress(RouterStep{"lighttpd başlatıldı (port 8090)", "ok"})
 
 	time.Sleep(800 * time.Millisecond)
-	testURL := fmt.Sprintf("http://%s:8090/pac", cfg.Host)
+	testURL := fmt.Sprintf("http://%s:8090/proxy.pac", cfg.Host)
 	resp, err := (&http.Client{Timeout: 5 * time.Second}).Get(testURL)
 	if err != nil || resp.StatusCode != 200 {
 		if resp != nil {
 			resp.Body.Close()
 		}
-		// /proxy.pac'ı da dene
-		testURL = fmt.Sprintf("http://%s:8090/proxy.pac", cfg.Host)
+		// /pac'ı da dene
+		testURL = fmt.Sprintf("http://%s:8090/pac", cfg.Host)
 		resp, err = (&http.Client{Timeout: 5 * time.Second}).Get(testURL)
 	}
 	if err != nil {
@@ -507,14 +507,14 @@ func RouterInstall(cfg RouterSetupCfg, progress func(RouterStep)) error {
 	}
 
 	time.Sleep(800 * time.Millisecond)
-	testURL := fmt.Sprintf("http://%s:8090/pac", cfg.Host)
+	testURL := fmt.Sprintf("http://%s:8090/proxy.pac", cfg.Host)
 	resp, err := (&http.Client{Timeout: 5 * time.Second}).Get(testURL)
 	if err != nil {
 		return fmt.Errorf("kurulum doğrulanamadı: %s erişilemiyor", testURL)
 	}
 	resp.Body.Close()
 	if resp.StatusCode != 200 {
-		return fmt.Errorf("/pac HTTP %d döndü", resp.StatusCode)
+		return fmt.Errorf("/proxy.pac HTTP %d döndü", resp.StatusCode)
 	}
 	progress(RouterStep{fmt.Sprintf("Doğrulandı — %s erişilebilir", testURL), "ok"})
 
@@ -525,7 +525,7 @@ func RouterInstall(cfg RouterSetupCfg, progress func(RouterStep)) error {
 // /pac ve /proxy.pac sırasıyla denenir (Keenetic uyumluluğu için).
 func RouterTest(host string) error {
 	c := &http.Client{Timeout: 5 * time.Second}
-	for _, path := range []string{"/pac", "/proxy.pac"} {
+	for _, path := range []string{"/proxy.pac", "/pac"} {
 		resp, err := c.Get(fmt.Sprintf("http://%s:8090%s", host, path))
 		if err == nil {
 			resp.Body.Close()
