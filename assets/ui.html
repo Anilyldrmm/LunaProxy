@@ -801,21 +801,27 @@ window.addEventListener('DOMContentLoaded', function() {
         </div>
         <div class="card">
           <div class="card-title">Tailscale — Sanal Ağ</div>
-          <div id="ts-status-row" style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
-            <div class="sdot" id="ts-sdot"></div>
-            <div>
-              <div class="sw-label" id="ts-slbl" style="font-size:12px">Tailscale durumu alınıyor…</div>
-              <div class="sw-sub" id="ts-ip-row" style="display:none">IP: <span id="ts-self-ip"></span> · <span id="ts-hostname"></span></div>
+          <div class="sw-row">
+            <div><div class="sw-label">Tailscale'ı etkinleştir</div><div class="sw-sub">Dışarıdan bağlantı için opsiyonel sanal ağ</div></div>
+            <label class="sw"><input type="checkbox" id="sw-tailscale" onchange="onTailscaleToggle(this.checked)"><div class="sw-track"></div></label>
+          </div>
+          <div id="ts-enabled-section" style="display:none;margin-top:10px">
+            <div id="ts-status-row" style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
+              <div class="sdot" id="ts-sdot"></div>
+              <div>
+                <div class="sw-label" id="ts-slbl" style="font-size:12px">Tailscale durumu alınıyor…</div>
+                <div class="sw-sub" id="ts-ip-row" style="display:none">IP: <span id="ts-self-ip"></span> · <span id="ts-hostname"></span></div>
+              </div>
             </div>
+            <div id="ts-peers-wrap" style="display:none">
+              <div class="s-label" style="margin-bottom:6px">Bağlı Cihazlar</div>
+              <div id="ts-peers-list"></div>
+            </div>
+            <button class="mob-refresh-btn" style="margin-top:8px" onclick="refreshTailscale(this)">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
+              Yenile
+            </button>
           </div>
-          <div id="ts-peers-wrap" style="display:none">
-            <div class="s-label" style="margin-bottom:6px">Bağlı Cihazlar</div>
-            <div id="ts-peers-list"></div>
-          </div>
-          <button class="mob-refresh-btn" style="margin-top:8px" onclick="refreshTailscale(this)">
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
-            Yenile
-          </button>
         </div>
         <button class="save-btn" onclick="saveSettings()">Ayarları Kaydet</button>
       </div>
@@ -826,7 +832,7 @@ window.addEventListener('DOMContentLoaded', function() {
           <div class="mob-tab active" onclick="mobTab(this,'wifi')">
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:middle;margin-right:4px"><path d="M5 12.55a11 11 0 0 1 14.08 0"/><path d="M1.42 9a16 16 0 0 1 21.16 0"/><path d="M8.53 16.11a6 6 0 0 1 6.95 0"/><circle cx="12" cy="20" r="1" fill="currentColor" stroke="none"/></svg>Wi-Fi Ağı
           </div>
-          <div class="mob-tab" onclick="mobTab(this,'data')">
+          <div class="mob-tab" id="ts-mob-tab" onclick="mobTab(this,'data')" style="display:none">
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:middle;margin-right:4px"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2z"/><path d="M12 8v4l3 3"/></svg>Tailscale
           </div>
         </div>
@@ -1150,8 +1156,24 @@ function saveSettings() {
     proxy_auto_start: !!(document.getElementById('sw-proxy-autostart') || {}).checked,
     proxy_port: parseInt((document.getElementById('inp-proxy-port') || {value:'8888'}).value) || 8888,
     pac_port: parseInt((document.getElementById('inp-pac-port') || {value:'8080'}).value) || 8080,
+    tailscale_enabled: !!(document.getElementById('sw-tailscale') || {}).checked,
   };
   window.goMessage(JSON.stringify({type:'saveSettings', payload: cfg}));
+}
+
+function onTailscaleToggle(enabled) {
+  var sec = document.getElementById('ts-enabled-section');
+  if (sec) sec.style.display = enabled ? '' : 'none';
+  var tab = document.getElementById('ts-mob-tab');
+  if (tab) tab.style.display = enabled ? '' : 'none';
+  if (!enabled) {
+    // Tailscale sekmesi açıksa Wi-Fi'ye geri dön
+    var dataContent = document.getElementById('mobt-data');
+    if (dataContent && dataContent.classList.contains('active')) {
+      var wifiTab = document.querySelector('.mob-tab');
+      if (wifiTab) mobTab(wifiTab, 'wifi');
+    }
+  }
 }
 
 function refreshTailscale(btn) {
@@ -1649,6 +1671,10 @@ function loadSettings(cfg) {
     bypassTa.value = Array.isArray(domains) ? domains.join('\n') : (domains||'');
     updateBypassCount();
   }
+  var tsEnabled = !!(cfg.tailscale_enabled !== undefined ? cfg.tailscale_enabled : (cfg.TailscaleEnabled !== undefined ? cfg.TailscaleEnabled : false));
+  var swTs = document.getElementById('sw-tailscale');
+  if (swTs) swTs.checked = tsEnabled;
+  onTailscaleToggle(tsEnabled);
   var savedTheme = cfg.theme||cfg.Theme;
   if (savedTheme && savedTheme !== _currentTheme) applyTheme(savedTheme);
 }

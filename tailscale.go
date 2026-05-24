@@ -56,6 +56,9 @@ func refreshTailscaleStatus() TailscaleStatus {
 }
 
 func fetchTailscaleStatus() TailscaleStatus {
+	if !getConfig().TailscaleEnabled {
+		return TailscaleStatus{}
+	}
 	cmd := exec.Command("tailscale", "status", "--json")
 	cmd.SysProcAttr = &syscall.SysProcAttr{
 		HideWindow:    true,

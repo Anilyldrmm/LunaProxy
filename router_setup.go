@@ -31,8 +31,7 @@ const routerLighttpdConf = `server.document-root = "/opt/share/pac"
 server.port = 8090
 server.pid-file = "/tmp/lunaproxy_lighttpd.pid"
 server.errorlog = "/tmp/lunaproxy_lighttpd.log"
-server.modules = ("mod_cgi", "mod_accesslog")
-accesslog.filename = "/dev/null"
+server.modules = ("mod_cgi")
 cgi.assign = (".sh" => "/opt/bin/sh", ".pac" => "/opt/bin/sh")
 $HTTP["url"] == "/pac" {
   cgi.assign = ("" => "/opt/bin/sh")
@@ -106,7 +105,7 @@ start() {
     kill "$(cat /tmp/lunaproxy_lighttpd.pid)" 2>/dev/null
     rm -f /tmp/lunaproxy_lighttpd.pid
   fi
-  /opt/bin/lighttpd -f /opt/share/pac/lighttpd.conf
+  /opt/sbin/lighttpd -f /opt/share/pac/lighttpd.conf
 }
 stop() {
   if [ -f /tmp/lunaproxy_lighttpd.pid ]; then
@@ -319,14 +318,17 @@ func routerInstallKeenetic(client *ssh.Client, cfg RouterSetupCfg, progress func
 	}
 	progress(RouterStep{"Scriptler yazıldı", "ok"})
 
-	// lighttpd'yi başlat ya da yeniden başlat
-	sshExecNDM(client, "kill $(cat /tmp/lunaproxy_lighttpd.pid 2>/dev/null) 2>/dev/null") //nolint:errcheck
+	// Çalışan lighttpd varsa durdur
+	sshExecNDM(client, "kill -9 $(cat /tmp/lunaproxy_lighttpd.pid 2>/dev/null) 2>/dev/null") //nolint:errcheck
 	time.Sleep(300 * time.Millisecond)
 
-	lighttpdBin := "/opt/bin/lighttpd"
+	// lighttpd'yi /opt/sbin'de ara (Entware bu yolu kullanır, /opt/bin değil)
+	lighttpdBin := "/opt/sbin/lighttpd"
+	if out, _ := sshExecNDM(client, "which lighttpd"); strings.TrimSpace(out) != "" {
+		lighttpdBin = strings.TrimSpace(out)
+	}
 	if _, err := sshExecNDM(client, lighttpdBin+" -f "+pacDir+"/lighttpd.conf"); err != nil {
-		// init.d üzerinden dene
-		sshExecNDM(client, "/opt/etc/init.d/S80lighttpd start") //nolint:errcheck
+		return fmt.Errorf("lighttpd başlatılamadı (%s): %w", lighttpdBin, err)
 	}
 	progress(RouterStep{"lighttpd başlatıldı (port 8090)", "ok"})
 

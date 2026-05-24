@@ -39,6 +39,9 @@ type Config struct {
 	BypassEnabled bool     `json:"bypass_enabled"`
 	BypassDomains []string `json:"bypass_domains"`
 
+	// Tailscale (opsiyonel — varsayılan kapalı)
+	TailscaleEnabled bool `json:"tailscale_enabled"`
+
 	// UI
 	Theme string `json:"theme"` // "neutral" | "purple"
 }
