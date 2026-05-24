@@ -66,12 +66,17 @@ func handleIPCMessage(data string) {
 		setConfig(cfg)
 		setStartup(cfg.AutoStart)
 		evalJS(`showSaveSuccess()`)
-		// Port değiştiyse firewall kurallarını güncelle
-		if cfg.ProxyPort != prevProxyPort || cfg.PACPort != prevPACPort {
-			go addFirewallRules(cfg.ProxyPort, cfg.PACPort)
-		}
-		if g.running {
-			go g.restart()
+		portsChanged := cfg.ProxyPort != prevProxyPort || cfg.PACPort != prevPACPort
+		if g.running || portsChanged {
+			go func() {
+				// Firewall önce güncellenmeli, sonra restart
+				if portsChanged {
+					addFirewallRules(cfg.ProxyPort, cfg.PACPort)
+				}
+				if g.running {
+					g.restart()
+				}
+			}()
 		}
 
 	case "clearLogs":
@@ -180,10 +185,13 @@ func handleIPCMessage(data string) {
 			c := getConfig()
 			ts := refreshTailscaleStatus()
 
-			// Tailscale bağlıysa Tailscale IP'sini tercih et
+			// Öncelik: Tailscale IP → Public IP → LAN IP
 			displayAddr := ts.SelfIP
 			if !ts.Running {
 				displayAddr = fetchPublicIP()
+				if displayAddr == "" {
+					displayAddr = g.localIP // LAN IP son çare
+				}
 			}
 
 			proxyURL := ""

@@ -13,7 +13,7 @@ import (
 )
 
 // probeRouterPACPath — router'da gerçekte çalışan PAC path'ini bulur.
-// /pac (yeni kurulum) veya /proxy.pac (eski/Keenetic kurulum) sırasıyla dener.
+// /proxy.pac (yeni kurulum) veya /pac (eski kurulum) sırasıyla dener.
 func probeRouterPACPath(gateway string) string {
 	c := &http.Client{Timeout: 3 * time.Second}
 	for _, path := range []string{"/proxy.pac", "/pac"} {

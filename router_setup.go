@@ -330,23 +330,11 @@ func routerInstallKeenetic(client *ssh.Client, cfg RouterSetupCfg, progress func
 	}
 	progress(RouterStep{"lighttpd başlatıldı (port 8090)", "ok"})
 
-	time.Sleep(800 * time.Millisecond)
-	testURL := fmt.Sprintf("http://%s:8090/proxy.pac", cfg.Host)
-	resp, err := (&http.Client{Timeout: 5 * time.Second}).Get(testURL)
-	if err != nil || resp.StatusCode != 200 {
-		if resp != nil {
-			resp.Body.Close()
-		}
-		// /pac'ı da dene
-		testURL = fmt.Sprintf("http://%s:8090/pac", cfg.Host)
-		resp, err = (&http.Client{Timeout: 5 * time.Second}).Get(testURL)
-	}
-	if err != nil {
-		return fmt.Errorf("kurulum doğrulanamadı: %s erişilemiyor", testURL)
-	}
-	resp.Body.Close()
-	if resp.StatusCode != 200 {
-		return fmt.Errorf("PAC HTTP %d döndü", resp.StatusCode)
+	// lighttpd'nin porta bağlanması için yeterince bekle (yavaş donanımda 800ms yetmeyebilir)
+	time.Sleep(2 * time.Second)
+	testURL, err2 := probeRouterPAC(cfg.Host)
+	if err2 != nil {
+		return err2
 	}
 	progress(RouterStep{fmt.Sprintf("Doğrulandı — %s erişilebilir", testURL), "ok"})
 	return nil
@@ -506,33 +494,40 @@ func RouterInstall(cfg RouterSetupCfg, progress func(RouterStep)) error {
 		progress(RouterStep{"Python HTTP sunucu başlatıldı (port 8090)", "ok"})
 	}
 
-	time.Sleep(800 * time.Millisecond)
-	testURL := fmt.Sprintf("http://%s:8090/proxy.pac", cfg.Host)
-	resp, err := (&http.Client{Timeout: 5 * time.Second}).Get(testURL)
-	if err != nil {
-		return fmt.Errorf("kurulum doğrulanamadı: %s erişilemiyor", testURL)
-	}
-	resp.Body.Close()
-	if resp.StatusCode != 200 {
-		return fmt.Errorf("/proxy.pac HTTP %d döndü", resp.StatusCode)
+	time.Sleep(2 * time.Second)
+	testURL, err2 := probeRouterPAC(cfg.Host)
+	if err2 != nil {
+		return err2
 	}
 	progress(RouterStep{fmt.Sprintf("Doğrulandı — %s erişilebilir", testURL), "ok"})
 
 	return nil
 }
 
-// RouterTest — önceden kurulu bir router'ın PAC endpoint'ini test eder.
-// /pac ve /proxy.pac sırasıyla denenir (Keenetic uyumluluğu için).
-func RouterTest(host string) error {
-	c := &http.Client{Timeout: 5 * time.Second}
-	for _, path := range []string{"/proxy.pac", "/pac"} {
-		resp, err := c.Get(fmt.Sprintf("http://%s:8090%s", host, path))
-		if err == nil {
-			resp.Body.Close()
-			if resp.StatusCode == 200 {
-				return nil
+// probeRouterPAC — port 8090'da çalışan PAC sunucusunu retry ile doğrular.
+// /proxy.pac ve /pac'ı sırayla dener; başarılı URL'i döner.
+func probeRouterPAC(host string) (string, error) {
+	client := &http.Client{Timeout: 5 * time.Second}
+	for attempt := 0; attempt < 3; attempt++ {
+		for _, path := range []string{"/proxy.pac", "/pac"} {
+			resp, err := client.Get(fmt.Sprintf("http://%s:8090%s", host, path))
+			if err == nil {
+				ok := resp.StatusCode == 200
+				resp.Body.Close()
+				if ok {
+					return fmt.Sprintf("http://%s:8090%s", host, path), nil
+				}
 			}
 		}
+		if attempt < 2 {
+			time.Sleep(time.Second)
+		}
 	}
-	return fmt.Errorf("http://%s:8090 PAC endpoint erişilemiyor", host)
+	return "", fmt.Errorf("kurulum doğrulanamadı: http://%s:8090 PAC endpoint erişilemiyor", host)
+}
+
+// RouterTest — önceden kurulu bir router'ın PAC endpoint'ini test eder.
+func RouterTest(host string) error {
+	_, err := probeRouterPAC(host)
+	return err
 }
