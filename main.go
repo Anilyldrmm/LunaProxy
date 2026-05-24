@@ -24,13 +24,15 @@ func openRunKey(write bool) (registry.Key, error) {
 const appName = "LunaProxy"
 
 type app struct {
-	mu        sync.Mutex
-	running   bool
-	localIP   string
-	proxySrv  *http.Server
-	pacSrv    *http.Server
-	pacPort   int    // aktif PAC port'u takip — port değişirse sunucu yeniden başlar
-	dpiSource string // aktif DPI kaynağı: "service"|"process"|"manual"|"bundle"|"disabled"|"none"|""
+	mu         sync.Mutex
+	running    bool
+	localIP    string
+	proxySrv   *http.Server
+	pacSrv     *http.Server
+	pacPort    int    // aktif PAC port'u takip — port değişirse sunucu yeniden başlar
+	dpiSource  string // aktif DPI kaynağı: "service"|"process"|"manual"|"bundle"|"disabled"|"none"|""
+	stopCancel context.CancelFunc // stop goroutine'ini iptal eder (hızlı yeniden başlatma için)
+	stopDone   chan struct{}       // stop goroutine'i Shutdown'ı tamamladığında kapanır
 }
 
 var g *app
@@ -79,10 +81,26 @@ func main() {
 
 func (a *app) start() error {
 	a.mu.Lock()
-	defer a.mu.Unlock()
 	if a.running {
+		a.mu.Unlock()
 		return nil
 	}
+	// Pending stop goroutine varsa iptal et ve portun serbest kalmasını bekle
+	if a.stopCancel != nil {
+		cancel := a.stopCancel
+		done := a.stopDone
+		a.stopCancel = nil
+		a.stopDone = nil
+		a.mu.Unlock()
+		cancel()
+		<-done
+		a.mu.Lock()
+		if a.running {
+			a.mu.Unlock()
+			return nil
+		}
+	}
+	defer a.mu.Unlock()
 
 	c := getConfig()
 	addFirewallRules(c.ProxyPort, c.PACPort)
@@ -196,15 +214,27 @@ func (a *app) stop() {
 	}
 	a.dpiSource = ""
 
+	// Önceki stop goroutine'i varsa iptal et (aynı proxy iki kez kapatılmasın)
+	if a.stopCancel != nil {
+		a.stopCancel()
+	}
+	stopCtx, stopCancel := context.WithCancel(context.Background())
+	a.stopCancel = stopCancel
+	done := make(chan struct{})
+	a.stopDone = done
+
 	a.mu.Unlock()
 
 	// 3. Router PAC'ı senkron güncelle, ardından proxy'yi kapat.
 	// pushRouterPAC önce tamamlanır (max ~6s), sonra 5s daha bekle → iOS yeni PAC'ı çeker.
-	// Toplam ~11s proxy ayakta kalır; bu sürede eski cached PAC kullanan iOS
-	// bağlantılarını sürdürür, yeni PAC çekince DIRECT'e geçer.
+	// start() çağrılırsa stopCtx iptal edilir → hemen Shutdown().
 	go func() {
+		defer close(done)
 		pushRouterPAC(localIP, "direct", 0)
-		time.Sleep(5 * time.Second)
+		select {
+		case <-time.After(5 * time.Second):
+		case <-stopCtx.Done(): // start() veya restart() çağrıldı — hemen kapat
+		}
 		if proxySrv != nil {
 			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 			defer cancel()
@@ -227,7 +257,49 @@ func (a *app) shutdown() {
 }
 
 func (a *app) restart() {
-	a.stop()
+	a.mu.Lock()
+	if !a.running {
+		a.mu.Unlock()
+		if err := a.start(); err != nil {
+			logError("Yeniden başlatma başarısız: " + err.Error())
+		}
+		return
+	}
+
+	// Pending stop goroutine'i iptal et
+	if a.stopCancel != nil {
+		a.stopCancel()
+		a.stopCancel = nil
+		a.stopDone = nil
+	}
+
+	stopRouterHeartbeat()
+	setPACDirect()
+
+	proxySrv := a.proxySrv
+	a.proxySrv = nil
+	a.running = false
+
+	c := getConfig()
+	if c.DNSMode != "unchanged" && c.DNSMode != "" {
+		go RestoreDNS()
+	}
+	if c.SetSystemProxy {
+		RestoreSystemProxy()
+	}
+	if gdpi.IsRunning() {
+		gdpi.Stop()
+	}
+	a.dpiSource = ""
+	a.mu.Unlock()
+
+	// Grace period yok — restart'ta portu hemen serbest bırak
+	if proxySrv != nil {
+		ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+		proxySrv.Shutdown(ctx)
+		cancel()
+	}
+
 	if err := a.start(); err != nil {
 		logError("Yeniden başlatma başarısız: " + err.Error())
 	}

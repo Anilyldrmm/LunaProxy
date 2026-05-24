@@ -44,7 +44,47 @@ func getLocalIP() string {
 		return "127.0.0.1"
 	}
 	defer conn.Close()
-	return conn.LocalAddr().(*net.UDPAddr).IP.String()
+	ip := conn.LocalAddr().(*net.UDPAddr).IP.String()
+	// Tailscale CGNAT aralığı (100.64.0.0/10) → gerçek LAN IP'sini bul
+	if strings.HasPrefix(ip, "100.") {
+		if lan := findLANIP(); lan != "" {
+			return lan
+		}
+	}
+	return ip
+}
+
+// findLANIP — Tailscale dışı, loopback dışı ilk IPv4 adresi döner.
+func findLANIP() string {
+	ifaces, err := net.Interfaces()
+	if err != nil {
+		return ""
+	}
+	for _, iface := range ifaces {
+		if iface.Flags&net.FlagLoopback != 0 || iface.Flags&net.FlagUp == 0 {
+			continue
+		}
+		if strings.Contains(strings.ToLower(iface.Name), "tailscale") {
+			continue
+		}
+		addrs, _ := iface.Addrs()
+		for _, addr := range addrs {
+			ipnet, ok := addr.(*net.IPNet)
+			if !ok {
+				continue
+			}
+			ip := ipnet.IP.To4()
+			if ip == nil || ip.IsLoopback() {
+				continue
+			}
+			// Tailscale CGNAT: 100.64.0.0 – 100.127.255.255
+			if ip[0] == 100 && ip[1] >= 64 && ip[1] < 128 {
+				continue
+			}
+			return ip.String()
+		}
+	}
+	return ""
 }
 
 // ── Firewall kuralları ────────────────────────────────────────────────────────

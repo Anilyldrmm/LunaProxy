@@ -4,6 +4,7 @@ package main
 
 import (
 	"os"
+	"time"
 
 	"fyne.io/systray"
 )
@@ -30,6 +31,17 @@ func onTrayReady() {
 	mUpdate := systray.AddMenuItem("Güncellemeleri Kontrol Et", "GitHub'da yeni sürüm ara")
 	systray.AddSeparator()
 	mQuit := systray.AddMenuItem("Çıkış", "Programı kapat")
+
+	// Otomatik başlatma durumunu yansıt (g.start() biraz sonra tamamlanır)
+	go func() {
+		for i := 0; i < 20; i++ {
+			time.Sleep(100 * time.Millisecond)
+			if g.running {
+				updateTrayState(true)
+				return
+			}
+		}
+	}()
 
 	go func() {
 		for {
