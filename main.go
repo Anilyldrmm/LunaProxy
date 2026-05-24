@@ -103,7 +103,6 @@ func (a *app) start() error {
 	defer a.mu.Unlock()
 
 	c := getConfig()
-	addFirewallRules(c.ProxyPort, c.PACPort)
 
 	// HTTP proxy
 	ps, err := startProxy(c.ProxyPort)

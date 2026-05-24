@@ -20,7 +20,12 @@ var pendingUpdateURL atomic.Value
 // lastLogSent — pushLogs'un son gönderdiği log index'i (dedup için).
 var lastLogSent atomic.Int64
 
+// toggleBusy — toggle işlemi devam ederken yeni toggle'ı engeller.
+var toggleBusy atomic.Bool
+
 // handleIPCMessage — JS'den gelen goMessage çağrılarını işler.
+// NOT: Bu fonksiyon WebView2 UI thread'inde çağrılır; bloke eden işlemler
+// goroutine'e alınmalı, aksi halde pencere donuyor.
 func handleIPCMessage(data string) {
 	var msg struct {
 		Type    string          `json:"type"`
@@ -32,16 +37,23 @@ func handleIPCMessage(data string) {
 	}
 	switch msg.Type {
 	case "toggle":
-		if g.running {
-			g.stop()
-		} else {
-			if err := g.start(); err != nil {
-				logError("Başlatma hatası: " + err.Error())
-				evalJS(fmt.Sprintf(`showError(%s)`, jsonEscape(err.Error())))
-			}
+		// Önceki toggle bitmeden yeni birini başlatma
+		if !toggleBusy.CompareAndSwap(false, true) {
+			return
 		}
-		updateTrayState(g.running)
-		pushStatus()
+		go func() {
+			defer toggleBusy.Store(false)
+			if g.running {
+				g.stop()
+			} else {
+				if err := g.start(); err != nil {
+					logError("Başlatma hatası: " + err.Error())
+					evalJS(fmt.Sprintf(`showError(%s)`, jsonEscape(err.Error())))
+				}
+			}
+			updateTrayState(g.running)
+			pushStatus()
+		}()
 
 	case "saveSettings":
 		var cfg Config
@@ -49,11 +61,17 @@ func handleIPCMessage(data string) {
 			logWarn("saveSettings parse: " + err.Error())
 			return
 		}
+		prevProxyPort := getConfig().ProxyPort
+		prevPACPort := getConfig().PACPort
 		setConfig(cfg)
 		setStartup(cfg.AutoStart)
 		evalJS(`showSaveSuccess()`)
+		// Port değiştiyse firewall kurallarını güncelle
+		if cfg.ProxyPort != prevProxyPort || cfg.PACPort != prevPACPort {
+			go addFirewallRules(cfg.ProxyPort, cfg.PACPort)
+		}
 		if g.running {
-			g.restart()
+			go g.restart()
 		}
 
 	case "clearLogs":

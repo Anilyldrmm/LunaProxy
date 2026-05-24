@@ -17,8 +17,10 @@ import (
 )
 
 type ghRelease struct {
-	TagName string `json:"tag_name"`
-	Assets  []struct {
+	TagName    string `json:"tag_name"`
+	Draft      bool   `json:"draft"`
+	Prerelease bool   `json:"prerelease"`
+	Assets     []struct {
 		Name               string `json:"name"`
 		BrowserDownloadURL string `json:"browser_download_url"`
 	} `json:"assets"`
@@ -52,37 +54,50 @@ func parseVer(s string) [3]int {
 	return v
 }
 
-// CheckUpdate — GitHub'dan son sürümü kontrol eder.
+// CheckUpdate — GitHub release listesinden en yüksek versiyonu bulur.
+// /releases/latest yerine /releases kullanır: "latest" işareti sıralı publish
+// nedeniyle eski bir sürümü gösterebilir; tüm listeden en büyük versiyon seçilir.
 // Güncelleme varsa (tagName, downloadURL) döner; yoksa ("","") döner.
 func CheckUpdate() (tagName, downloadURL string, err error) {
-	url := fmt.Sprintf("https://api.github.com/repos/%s/%s/releases/latest",
+	apiURL := fmt.Sprintf("https://api.github.com/repos/%s/%s/releases?per_page=50",
 		githubOwner, githubRepo)
 	client := &http.Client{Timeout: 10 * time.Second}
-	resp, err := client.Get(url)
+	resp, err := client.Get(apiURL)
 	if err != nil {
 		return "", "", err
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode == 404 {
-		return "", "", nil // henüz release yok
+		return "", "", nil
 	}
 	if resp.StatusCode != 200 {
 		return "", "", fmt.Errorf("GitHub API: %d", resp.StatusCode)
 	}
-	var rel ghRelease
-	if err := json.NewDecoder(resp.Body).Decode(&rel); err != nil {
+	var releases []ghRelease
+	if err := json.NewDecoder(resp.Body).Decode(&releases); err != nil {
 		return "", "", err
 	}
-	if !newerVersion(Version, rel.TagName) {
-		return "", "", nil
-	}
-	for _, a := range rel.Assets {
-		name := strings.ToLower(a.Name)
-		if strings.HasSuffix(name, ".exe") {
-			return rel.TagName, a.BrowserDownloadURL, nil
+
+	// Draft ve pre-release olmayanlar arasından en yüksek versiyonu bul
+	var best *ghRelease
+	for i := range releases {
+		r := &releases[i]
+		if r.Draft || r.Prerelease {
+			continue
+		}
+		if best == nil || newerVersion(best.TagName, r.TagName) {
+			best = r
 		}
 	}
-	return rel.TagName, "", nil
+	if best == nil || !newerVersion(Version, best.TagName) {
+		return "", "", nil
+	}
+	for _, a := range best.Assets {
+		if strings.HasSuffix(strings.ToLower(a.Name), ".exe") {
+			return best.TagName, a.BrowserDownloadURL, nil
+		}
+	}
+	return best.TagName, "", nil
 }
 
 // DownloadAndReplace — güncelleme dosyasını indirir ve uygular.
