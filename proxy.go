@@ -1,15 +1,18 @@
 package main
 
 import (
+	"bufio"
+	"bytes"
+	"crypto/tls"
 	"fmt"
 	"io"
 	"net"
 	"net/http"
+	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
-
 )
 
 // ── Per-IP cihaz takibi ──────────────────────────────────────────────────────
@@ -202,6 +205,18 @@ func handleConnect(w http.ResponseWriter, r *http.Request) {
 	defer stats.decConn()
 	defer decDeviceConn(ip)
 
+	host := hostOnly(r.Host)
+	c := getConfig()
+	if c.AdBlockEnabled && !isMITMExempt(host) {
+		mitmConnect(w, r, ip, host)
+		return
+	}
+	passthroughConnect(w, r, ip)
+}
+
+// passthroughConnect — ham TCP tünel (MITM-exempt host'lar ve AdBlock
+// kapalıyken kullanılan, önceki handleConnect'in birebir aynısı).
+func passthroughConnect(w http.ResponseWriter, r *http.Request, ip string) {
 	dst, err := net.DialTimeout("tcp", r.Host, 15*time.Second)
 	if err != nil {
 		http.Error(w, "bağlantı kurulamadı", http.StatusBadGateway)
@@ -222,34 +237,34 @@ func handleConnect(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "hijack desteklenmiyor", http.StatusInternalServerError)
 		return
 	}
-	src, rw, err := hj.Hijack()
+	src, _, err := hj.Hijack()
 	if err != nil {
 		dst.Close()
 		return
 	}
 
 	src.Write([]byte("HTTP/1.1 200 Connection Established\r\n\r\n"))
+	rawTunnel(src, dst, ip)
+}
 
+// rawTunnel — iki bağlantı arasında ham byte kopyası yapar (bufPool'lu),
+// her iki yön kapanana kadar bloklar. Her iki taraf da fonksiyon dönmeden
+// önce kapatılır.
+func rawTunnel(a, b io.ReadWriteCloser, ip string) {
+	defer a.Close()
+	defer b.Close()
 	var wg sync.WaitGroup
 	wg.Add(2)
-	go func() {
+	cp := func(dst io.Writer, src io.Reader) {
 		defer wg.Done()
 		buf := bufPool.Get().(*[]byte)
-		n, _ := io.CopyBuffer(dst, rw, *buf)
+		n, _ := io.CopyBuffer(dst, src, *buf)
 		bufPool.Put(buf)
 		stats.addBytes(n)
 		trackDevice(ip, n)
-		dst.Close()
-	}()
-	go func() {
-		defer wg.Done()
-		buf := bufPool.Get().(*[]byte)
-		n, _ := io.CopyBuffer(src, dst, *buf)
-		bufPool.Put(buf)
-		stats.addBytes(n)
-		trackDevice(ip, n)
-		src.Close()
-	}()
+	}
+	go cp(a, b)
+	cp(b, a)
 	wg.Wait()
 }
 
@@ -294,4 +309,142 @@ func handleHTTP(w http.ResponseWriter, r *http.Request) {
 	bufPool.Put(buf)
 	stats.addBytes(n)
 	trackDevice(ip, n)
+}
+
+// mitmConnect — AdBlockEnabled=true ve host MITM-exempt değilken çalışır.
+// Hedefe TLS handshake başarısız olursa (örn. cert pinning) ham tünele düşer.
+func mitmConnect(w http.ResponseWriter, r *http.Request, ip, host string) {
+	dst, err := tls.Dial("tcp", r.Host, &tls.Config{ServerName: host, NextProtos: []string{"http/1.1"}})
+	if err != nil {
+		logWarn(fmt.Sprintf("MITM %s → hedef TLS reddetti, ham tünele düşülüyor: %v", host, err))
+		passthroughConnect(w, r, ip)
+		return
+	}
+
+	hj, ok := w.(http.Hijacker)
+	if !ok {
+		dst.Close()
+		http.Error(w, "hijack desteklenmiyor", http.StatusInternalServerError)
+		return
+	}
+	clientRaw, _, err := hj.Hijack()
+	if err != nil {
+		dst.Close()
+		return
+	}
+	if _, err := clientRaw.Write([]byte("HTTP/1.1 200 Connection Established\r\n\r\n")); err != nil {
+		clientRaw.Close()
+		dst.Close()
+		return
+	}
+
+	clientTLS := tls.Server(clientRaw, &tls.Config{
+		NextProtos: []string{"http/1.1"},
+		GetCertificate: func(hello *tls.ClientHelloInfo) (*tls.Certificate, error) {
+			name := hello.ServerName
+			if name == "" {
+				name = host
+			}
+			return leafCertFor(name)
+		},
+	})
+	if err := clientTLS.Handshake(); err != nil {
+		clientTLS.Close()
+		dst.Close()
+		logWarn(fmt.Sprintf("MITM %s → istemci TLS handshake hatası: %v", host, err))
+		return
+	}
+	defer clientTLS.Close()
+	defer dst.Close()
+
+	clientBR := bufio.NewReader(clientTLS)
+	serverBR := bufio.NewReader(dst)
+
+	for {
+		req, err := http.ReadRequest(clientBR)
+		if err != nil {
+			return
+		}
+		req.URL.Scheme = "https"
+		req.URL.Host = host
+		reqURL := req.URL.String()
+
+		if adblock != nil && adblock.ShouldBlock(reqURL, host) {
+			io.Copy(io.Discard, req.Body)
+			clientTLS.Write([]byte("HTTP/1.1 204 No Content\r\nContent-Length: 0\r\nConnection: keep-alive\r\n\r\n"))
+			continue
+		}
+
+		req.Header.Set("Accept-Encoding", "identity")
+		req.RequestURI = ""
+		if err := req.Write(dst); err != nil {
+			return
+		}
+
+		resp, err := http.ReadResponse(serverBR, req)
+		if err != nil {
+			return
+		}
+
+		if isHTMLResponse(resp) {
+			injectCosmeticCSS(resp, host)
+		}
+
+		n := resp.ContentLength
+		if err := resp.Write(clientTLS); err != nil {
+			resp.Body.Close()
+			return
+		}
+		resp.Body.Close()
+		if n > 0 {
+			stats.addBytes(n)
+			trackDevice(ip, n)
+		}
+
+		if resp.StatusCode == http.StatusSwitchingProtocols {
+			rawTunnel(clientTLS, dst, ip)
+			return
+		}
+		if req.Close || resp.Close {
+			return
+		}
+	}
+}
+
+// isHTMLResponse — yanıtın Content-Type'ının text/html olup olmadığını döner.
+func isHTMLResponse(resp *http.Response) bool {
+	return strings.Contains(resp.Header.Get("Content-Type"), "text/html")
+}
+
+// injectCosmeticCSS — HTML gövdesini (en fazla 2MB) buffera alıp </head>
+// öncesine cosmetic CSS enjekte eder, Content-Length'i günceller.
+// Selector yoksa veya gövde okunamazsa dokunmadan bırakır.
+func injectCosmeticCSS(resp *http.Response, host string) {
+	if adblock == nil {
+		return
+	}
+	selectors := adblock.CosmeticRules(host)
+	if len(selectors) == 0 {
+		return
+	}
+	body, err := io.ReadAll(io.LimitReader(resp.Body, 2<<20))
+	resp.Body.Close()
+	if err != nil {
+		resp.Body = io.NopCloser(bytes.NewReader(body))
+		return
+	}
+
+	style := []byte("<style>" + strings.Join(selectors, ",") + "{display:none!important}</style></head>")
+	if idx := bytes.LastIndex(body, []byte("</head>")); idx >= 0 {
+		newBody := make([]byte, 0, len(body)+len(style))
+		newBody = append(newBody, body[:idx]...)
+		newBody = append(newBody, style...)
+		newBody = append(newBody, body[idx+len("</head>"):]...)
+		body = newBody
+	}
+
+	resp.Body = io.NopCloser(bytes.NewReader(body))
+	resp.ContentLength = int64(len(body))
+	resp.Header.Set("Content-Length", strconv.Itoa(len(body)))
+	resp.Header.Del("Transfer-Encoding")
 }
