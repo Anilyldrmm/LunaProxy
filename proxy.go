@@ -374,6 +374,14 @@ func mitmConnect(w http.ResponseWriter, r *http.Request, ip, host string) {
 
 	clientTLS := tls.Server(clientRaw, &tls.Config{
 		NextProtos: []string{"http/1.1"},
+		// Bilinen sınır: istemci ClientHello'da CONNECT hedefinden (host) farklı bir
+		// SNI sunarsa (nadir — connection coalescing veya standart dışı istemci) ve o
+		// isim için leafCertFor hata verirse, handshake sert hata ile kapanır — bu
+		// noktada istemciye zaten "200 Connection Established" gönderilmiş ve
+		// istemci bizim sahte kimliğimizle TLS handshake'ine başlamış olduğundan ham
+		// tünele düşmek artık mümkün değil (gerçek sunucunun handshake byte'larını
+		// bu aşamada istemciye iletemeyiz). Yukarıdaki eager leafCertFor(host)
+		// ön-kontrolü sadece CONNECT hedefi için hata olasılığını elemine eder.
 		GetCertificate: func(hello *tls.ClientHelloInfo) (*tls.Certificate, error) {
 			name := hello.ServerName
 			if name == "" {
