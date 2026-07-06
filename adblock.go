@@ -79,6 +79,8 @@ func initAdblock() {
 		logWarn("adblock motoru yüklenemedi, reklam engelleme devre dışı: " + err.Error())
 		return
 	}
+	mitmMu.Lock()
 	adblock = e
+	mitmMu.Unlock()
 	logInfo("adblock motoru yüklendi")
 }

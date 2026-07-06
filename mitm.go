@@ -21,7 +21,33 @@ var (
 	mitmCACert *x509.Certificate
 	mitmCAKey  *ecdsa.PrivateKey
 	leafCache  sync.Map // host string -> *tls.Certificate
+
+	// mitmMu — mitmCACert/mitmCAKey/adblock, AdBlock ayarı çalışırken (restart
+	// olmadan) açılırsa bir goroutine'den geç (lazy) kurulabilir; bu sırada proxy
+	// zaten istek işliyor olabileceğinden okuma/yazma bu mutex ile korunur.
+	mitmMu sync.RWMutex
 )
+
+// mitmReady — CA ve adblock motorunun ikisi de hazır mı (MITM için ön koşul).
+func mitmReady() bool {
+	mitmMu.RLock()
+	defer mitmMu.RUnlock()
+	return mitmCACert != nil && adblock != nil
+}
+
+// getCA — mitmCACert/mitmCAKey çiftini kilit altında döner.
+func getCA() (*x509.Certificate, *ecdsa.PrivateKey) {
+	mitmMu.RLock()
+	defer mitmMu.RUnlock()
+	return mitmCACert, mitmCAKey
+}
+
+// getAdblock — adblock motor referansını kilit altında döner.
+func getAdblock() *adblockEngine {
+	mitmMu.RLock()
+	defer mitmMu.RUnlock()
+	return adblock
+}
 
 // mitmCAPaths — CA sertifika/anahtar dosyalarının config ile aynı dizindeki yolu.
 func mitmCAPaths() (certPath, keyPath string) {
@@ -34,7 +60,9 @@ func mitmCAPaths() (certPath, keyPath string) {
 func ensureMITMCA() error {
 	certPath, keyPath := mitmCAPaths()
 	if cert, key, err := loadCA(certPath, keyPath); err == nil {
+		mitmMu.Lock()
 		mitmCACert, mitmCAKey = cert, key
+		mitmMu.Unlock()
 		return nil
 	}
 	cert, key, err := generateCA()
@@ -44,7 +72,9 @@ func ensureMITMCA() error {
 	if err := saveCA(certPath, keyPath, cert, key); err != nil {
 		return fmt.Errorf("CA kaydedilemedi: %w", err)
 	}
+	mitmMu.Lock()
 	mitmCACert, mitmCAKey = cert, key
+	mitmMu.Unlock()
 	return nil
 }
 
@@ -155,12 +185,16 @@ func leafCertFor(host string) (*tls.Certificate, error) {
 		KeyUsage:     x509.KeyUsageDigitalSignature | x509.KeyUsageKeyEncipherment,
 		ExtKeyUsage:  []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth},
 	}
-	der, err := x509.CreateCertificate(rand.Reader, tmpl, mitmCACert, &key.PublicKey, mitmCAKey)
+	caCert, caKey := getCA()
+	if caCert == nil {
+		return nil, fmt.Errorf("CA henüz hazır değil")
+	}
+	der, err := x509.CreateCertificate(rand.Reader, tmpl, caCert, &key.PublicKey, caKey)
 	if err != nil {
 		return nil, err
 	}
 	leaf := &tls.Certificate{
-		Certificate: [][]byte{der, mitmCACert.Raw},
+		Certificate: [][]byte{der, caCert.Raw},
 		PrivateKey:  key,
 	}
 	leafCache.Store(host, leaf)

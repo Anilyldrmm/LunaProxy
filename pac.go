@@ -154,23 +154,25 @@ func buildPACMux(localIP string, port int) *http.ServeMux {
 	})
 
 	mux.HandleFunc("/ca.crt", func(w http.ResponseWriter, r *http.Request) {
-		if mitmCACert == nil {
+		cert, _ := getCA()
+		if cert == nil {
 			http.Error(w, "CA henüz hazır değil", http.StatusServiceUnavailable)
 			return
 		}
 		w.Header().Set("Content-Type", "application/x-x509-ca-cert")
 		w.Header().Set("Content-Disposition", `attachment; filename="lunaproxy-ca.crt"`)
-		w.Write(mitmCACert.Raw)
+		w.Write(cert.Raw)
 	})
 
 	mux.HandleFunc("/ca.mobileconfig", func(w http.ResponseWriter, r *http.Request) {
-		if mitmCACert == nil {
+		cert, _ := getCA()
+		if cert == nil {
 			http.Error(w, "CA henüz hazır değil", http.StatusServiceUnavailable)
 			return
 		}
 		w.Header().Set("Content-Type", "application/x-apple-aspen-config")
 		w.Header().Set("Content-Disposition", `attachment; filename="lunaproxy-ca.mobileconfig"`)
-		fmt.Fprintf(w, mobileConfigTemplate, base64.StdEncoding.EncodeToString(mitmCACert.Raw))
+		fmt.Fprintf(w, mobileConfigTemplate, base64.StdEncoding.EncodeToString(cert.Raw))
 	})
 
 	setupURL := fmt.Sprintf("http://%s:%d/setup", localIP, port)

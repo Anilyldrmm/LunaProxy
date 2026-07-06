@@ -222,7 +222,7 @@ func handleConnect(w http.ResponseWriter, r *http.Request) {
 // yol açar ve adblock==nil iken MITM etmenin hiçbir filtreleme faydası
 // olmadan gereksiz risk/overhead eklemekten başka anlamı kalmaz.
 func shouldMITM(c Config, host string) bool {
-	return c.AdBlockEnabled && mitmCACert != nil && adblock != nil && !isMITMExempt(host)
+	return c.AdBlockEnabled && mitmReady() && !isMITMExempt(host)
 }
 
 // passthroughConnect — ham TCP tünel (MITM-exempt host'lar ve AdBlock
@@ -425,7 +425,7 @@ func mitmConnect(w http.ResponseWriter, r *http.Request, ip, host string) {
 		req.URL.Host = host
 		reqURL := req.URL.String()
 
-		if adblock != nil && adblock.ShouldBlock(reqURL, host) {
+		if ab := getAdblock(); ab != nil && ab.ShouldBlock(reqURL, host) {
 			io.Copy(io.Discard, req.Body)
 			clientTLS.Write([]byte("HTTP/1.1 204 No Content\r\nContent-Length: 0\r\nConnection: keep-alive\r\n\r\n"))
 			continue
@@ -477,10 +477,16 @@ func isHTMLResponse(resp *http.Response) bool {
 // öncesine cosmetic CSS enjekte eder, Content-Length'i günceller.
 // Selector yoksa veya gövde okunamazsa dokunmadan bırakır.
 func injectCosmeticCSS(resp *http.Response, host string) {
-	if adblock == nil {
+	ab := getAdblock()
+	if ab == nil {
 		return
 	}
-	selectors := adblock.CosmeticRules(host)
+	// Accept-Encoding:identity istendi ama bazı sunucu/CDN'ler yine de sıkıştırılmış
+	// gövde döner — bu durumda ham metin enjeksiyonu sıkıştırılmış akışı bozar.
+	if resp.Header.Get("Content-Encoding") != "" {
+		return
+	}
+	selectors := ab.CosmeticRules(host)
 	if len(selectors) == 0 {
 		return
 	}
