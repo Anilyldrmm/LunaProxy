@@ -48,6 +48,10 @@ func main() {
 
 	SentinelCheck()
 	loadConfig()
+	if err := ensureMITMCA(); err != nil {
+		logError("CA sertifikası hazırlanamadı, reklam engelleme kullanılamaz: " + err.Error())
+	}
+	initAdblock()
 	g = &app{localIP: getLocalIP()}
 
 	// PAC sunucusunu proxy'den bağımsız, hemen başlat.
