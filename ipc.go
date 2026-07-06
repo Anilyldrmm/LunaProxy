@@ -65,17 +65,6 @@ func handleIPCMessage(data string) {
 		prevPACPort := getConfig().PACPort
 		setConfig(cfg)
 		setStartup(cfg.AutoStart)
-		if cfg.AdBlockEnabled && mitmCACert == nil {
-			// Başlangıçta AdBlock kapalıydı, motor hiç kurulmamıştı — şimdi
-			// açıldığına göre CA/adblock'u geç (lazy) kur, restart gerektirmesin.
-			go func() {
-				if err := ensureMITMCA(); err != nil {
-					logError("CA sertifikası hazırlanamadı, reklam engelleme kullanılamaz: " + err.Error())
-					return
-				}
-				initAdblock()
-			}()
-		}
 		evalJS(`showSaveSuccess()`)
 		portsChanged := cfg.ProxyPort != prevProxyPort || cfg.PACPort != prevPACPort
 		if g.running || portsChanged {

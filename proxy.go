@@ -1,9 +1,6 @@
 package main
 
 import (
-	"bufio"
-	"bytes"
-	"crypto/tls"
 	"fmt"
 	"io"
 	"net"
@@ -12,6 +9,7 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
+
 )
 
 // ── Per-IP cihaz takibi ──────────────────────────────────────────────────────
@@ -204,30 +202,6 @@ func handleConnect(w http.ResponseWriter, r *http.Request) {
 	defer stats.decConn()
 	defer decDeviceConn(ip)
 
-	host := hostOnly(r.Host)
-	c := getConfig()
-	if shouldMITM(c, host) {
-		mitmConnect(w, r, ip, host)
-		return
-	}
-	passthroughConnect(w, r, ip)
-}
-
-// shouldMITM — bir CONNECT isteğinin MITM yoluna mı yoksa ham tünele mi
-// düşeceğine karar verir. AdBlock açık ve host MITM-exempt olmasa bile,
-// MITM ön koşulları (CA başlangıçta yüklenmiş/üretilmiş, adblock motoru
-// başlangıçta parse edilmiş) hazır değilse ham tünele düşülür — aksi halde
-// mitmCACert==nil iken leafCertFor→x509.CreateCertificate her bağlantıda
-// panic'e (net/http tarafından recover edilir ama bağlantı başarısız olur)
-// yol açar ve adblock==nil iken MITM etmenin hiçbir filtreleme faydası
-// olmadan gereksiz risk/overhead eklemekten başka anlamı kalmaz.
-func shouldMITM(c Config, host string) bool {
-	return c.AdBlockEnabled && mitmReady() && !isMITMExempt(host)
-}
-
-// passthroughConnect — ham TCP tünel (MITM-exempt host'lar ve AdBlock
-// kapalıyken kullanılan, önceki handleConnect'in birebir aynısı).
-func passthroughConnect(w http.ResponseWriter, r *http.Request, ip string) {
 	dst, err := net.DialTimeout("tcp", r.Host, 15*time.Second)
 	if err != nil {
 		http.Error(w, "bağlantı kurulamadı", http.StatusBadGateway)
@@ -255,51 +229,27 @@ func passthroughConnect(w http.ResponseWriter, r *http.Request, ip string) {
 	}
 
 	src.Write([]byte("HTTP/1.1 200 Connection Established\r\n\r\n"))
-	rawTunnel(&bufferedConn{r: rw.Reader, Conn: src}, dst, ip)
-}
 
-// bufferedConn — Hijack()'ten gelen bufio.Reader'daki (varsa) önceden
-// okunmuş byte'ları kaybetmeden ham tünele geçmek için kullanılır.
-type bufferedConn struct {
-	r *bufio.Reader
-	net.Conn
-}
-
-func (b *bufferedConn) Read(p []byte) (int, error) {
-	return b.r.Read(p)
-}
-
-// countingWriter — Write edilen gercek byte sayisini tutar (Content-Length
-// veya chunked framing'den bagimsiz, stats/device takibi icin).
-type countingWriter struct {
-	io.Writer
-	n int64
-}
-
-func (c *countingWriter) Write(p []byte) (int, error) {
-	n, err := c.Writer.Write(p)
-	c.n += int64(n)
-	return n, err
-}
-
-// rawTunnel — iki bağlantı arasında ham byte kopyası yapar (bufPool'lu),
-// her iki yön kapanana kadar bloklar. Her iki taraf da fonksiyon dönmeden
-// önce kapatılır.
-func rawTunnel(a, b io.ReadWriteCloser, ip string) {
-	defer a.Close()
-	defer b.Close()
 	var wg sync.WaitGroup
 	wg.Add(2)
-	cp := func(dst io.Writer, src io.Reader) {
+	go func() {
 		defer wg.Done()
 		buf := bufPool.Get().(*[]byte)
-		n, _ := io.CopyBuffer(dst, src, *buf)
+		n, _ := io.CopyBuffer(dst, rw, *buf)
 		bufPool.Put(buf)
 		stats.addBytes(n)
 		trackDevice(ip, n)
-	}
-	go cp(a, b)
-	cp(b, a)
+		dst.Close()
+	}()
+	go func() {
+		defer wg.Done()
+		buf := bufPool.Get().(*[]byte)
+		n, _ := io.CopyBuffer(src, dst, *buf)
+		bufPool.Put(buf)
+		stats.addBytes(n)
+		trackDevice(ip, n)
+		src.Close()
+	}()
 	wg.Wait()
 }
 
@@ -344,181 +294,4 @@ func handleHTTP(w http.ResponseWriter, r *http.Request) {
 	bufPool.Put(buf)
 	stats.addBytes(n)
 	trackDevice(ip, n)
-}
-
-// mitmConnect — AdBlockEnabled=true ve host MITM-exempt değilken çalışır.
-// Hedefe TLS handshake başarısız olursa (örn. cert pinning) ham tünele düşer.
-func mitmConnect(w http.ResponseWriter, r *http.Request, ip, host string) {
-	dst, err := tls.DialWithDialer(&net.Dialer{Timeout: 15 * time.Second}, "tcp", r.Host, &tls.Config{ServerName: host, NextProtos: []string{"http/1.1"}})
-	if err != nil {
-		logWarn(fmt.Sprintf("MITM %s → hedef TLS reddetti, ham tünele düşülüyor: %v", host, err))
-		passthroughConnect(w, r, ip)
-		return
-	}
-
-	// Leaf sertifikayı istemciyi hijack etmeden ÖNCE üret — istemciye
-	// "200 Connection Established" söylendikten sonra artık ham pass-through'a
-	// dönülemez (istemci fake sertifika bekliyor olur), o yüzden hata burada
-	// yakalanmalı.
-	if _, err := leafCertFor(host); err != nil {
-		dst.Close()
-		logWarn(fmt.Sprintf("MITM %s → leaf sertifika üretilemedi, ham tünele düşülüyor: %v", host, err))
-		passthroughConnect(w, r, ip)
-		return
-	}
-
-	hj, ok := w.(http.Hijacker)
-	if !ok {
-		dst.Close()
-		http.Error(w, "hijack desteklenmiyor", http.StatusInternalServerError)
-		return
-	}
-	clientRaw, _, err := hj.Hijack()
-	if err != nil {
-		dst.Close()
-		return
-	}
-	if _, err := clientRaw.Write([]byte("HTTP/1.1 200 Connection Established\r\n\r\n")); err != nil {
-		clientRaw.Close()
-		dst.Close()
-		return
-	}
-
-	clientTLS := tls.Server(clientRaw, &tls.Config{
-		NextProtos: []string{"http/1.1"},
-		// Bilinen sınır: istemci ClientHello'da CONNECT hedefinden (host) farklı bir
-		// SNI sunarsa (nadir — connection coalescing veya standart dışı istemci) ve o
-		// isim için leafCertFor hata verirse, handshake sert hata ile kapanır — bu
-		// noktada istemciye zaten "200 Connection Established" gönderilmiş ve
-		// istemci bizim sahte kimliğimizle TLS handshake'ine başlamış olduğundan ham
-		// tünele düşmek artık mümkün değil (gerçek sunucunun handshake byte'larını
-		// bu aşamada istemciye iletemeyiz). Yukarıdaki eager leafCertFor(host)
-		// ön-kontrolü sadece CONNECT hedefi için hata olasılığını elemine eder.
-		GetCertificate: func(hello *tls.ClientHelloInfo) (*tls.Certificate, error) {
-			name := hello.ServerName
-			if name == "" {
-				name = host
-			}
-			return leafCertFor(name)
-		},
-	})
-	clientRaw.SetDeadline(time.Now().Add(15 * time.Second))
-	if err := clientTLS.Handshake(); err != nil {
-		clientTLS.Close()
-		dst.Close()
-		logWarn(fmt.Sprintf("MITM %s → istemci TLS handshake hatası: %v", host, err))
-		return
-	}
-	clientRaw.SetDeadline(time.Time{})
-	defer clientTLS.Close()
-	defer dst.Close()
-
-	clientBR := bufio.NewReader(clientTLS)
-	serverBR := bufio.NewReader(dst)
-
-	for {
-		req, err := http.ReadRequest(clientBR)
-		if err != nil {
-			return
-		}
-		req.URL.Scheme = "https"
-		req.URL.Host = host
-		reqURL := req.URL.String()
-
-		if ab := getAdblock(); ab != nil && ab.ShouldBlock(reqURL, host) {
-			io.Copy(io.Discard, req.Body)
-			clientTLS.Write([]byte("HTTP/1.1 204 No Content\r\nContent-Length: 0\r\nConnection: keep-alive\r\n\r\n"))
-			continue
-		}
-
-		req.Header.Set("Accept-Encoding", "identity")
-		req.RequestURI = ""
-		reqCW := &countingWriter{Writer: dst}
-		if err := req.Write(reqCW); err != nil {
-			return
-		}
-
-		resp, err := http.ReadResponse(serverBR, req)
-		if err != nil {
-			return
-		}
-
-		if isHTMLResponse(resp) {
-			injectCosmeticCSS(resp, host)
-		}
-
-		respCW := &countingWriter{Writer: clientTLS}
-		if err := resp.Write(respCW); err != nil {
-			resp.Body.Close()
-			return
-		}
-		resp.Body.Close()
-		if total := reqCW.n + respCW.n; total > 0 {
-			stats.addBytes(total)
-			trackDevice(ip, total)
-		}
-
-		if resp.StatusCode == http.StatusSwitchingProtocols {
-			rawTunnel(&bufferedConn{r: clientBR, Conn: clientTLS}, &bufferedConn{r: serverBR, Conn: dst}, ip)
-			return
-		}
-		if req.Close || resp.Close {
-			return
-		}
-	}
-}
-
-// isHTMLResponse — yanıtın Content-Type'ının text/html olup olmadığını döner.
-func isHTMLResponse(resp *http.Response) bool {
-	return strings.Contains(resp.Header.Get("Content-Type"), "text/html")
-}
-
-// injectCosmeticCSS — HTML gövdesini (en fazla 2MB) buffera alıp </head>
-// öncesine cosmetic CSS enjekte eder, Content-Length'i günceller.
-// Selector yoksa veya gövde okunamazsa dokunmadan bırakır.
-func injectCosmeticCSS(resp *http.Response, host string) {
-	ab := getAdblock()
-	if ab == nil {
-		return
-	}
-	// Accept-Encoding:identity istendi ama bazı sunucu/CDN'ler yine de sıkıştırılmış
-	// gövde döner — bu durumda ham metin enjeksiyonu sıkıştırılmış akışı bozar.
-	if resp.Header.Get("Content-Encoding") != "" {
-		return
-	}
-	selectors := ab.CosmeticRules(host)
-	if len(selectors) == 0 {
-		return
-	}
-	body, err := io.ReadAll(io.LimitReader(resp.Body, 2<<20))
-	if err != nil {
-		resp.Body = io.NopCloser(io.MultiReader(bytes.NewReader(body), resp.Body))
-		return
-	}
-
-	idx := bytes.LastIndex(body, []byte("</head>"))
-	if idx < 0 {
-		// </head> bulunamadi (govde limit disinda kalmis olabilir) — govdeye dokunma, oldugu gibi ilet
-		resp.Body = io.NopCloser(io.MultiReader(bytes.NewReader(body), resp.Body))
-		return
-	}
-
-	style := []byte("<style>" + strings.Join(selectors, ",") + "{display:none!important}</style></head>")
-	newBody := make([]byte, 0, len(body)+len(style))
-	newBody = append(newBody, body[:idx]...)
-	newBody = append(newBody, style...)
-	newBody = append(newBody, body[idx+len("</head>"):]...)
-
-	// newBody sadece ilk 2MB'lık ön ekten oluşuyor — gerçek gövde daha
-	// büyükse resp.Body'de hâlâ okunmamış kuyruk vardır. Onu MultiReader ile
-	// zincirleyerek hem veri kaybını önlüyoruz hem de alttaki bağlantıyı
-	// tam olarak boşaltıp bir sonraki keep-alive isteğinin doğru
-	// ayrıştırılmasını garanti ediyoruz. Nihai uzunluk önceden bilinemediği
-	// için ContentLength=-1 ve Transfer-Encoding: chunked kullanılıyor —
-	// (*http.Response).Write bunu otomatik olarak chunked olarak yazar.
-	resp.Body = io.NopCloser(io.MultiReader(bytes.NewReader(newBody), resp.Body))
-	resp.ContentLength = -1
-	resp.TransferEncoding = []string{"chunked"}
-	resp.Header.Del("Content-Length")
-	resp.Header.Del("Transfer-Encoding")
 }

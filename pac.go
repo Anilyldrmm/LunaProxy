@@ -1,7 +1,6 @@
 ﻿package main
 
 import (
-	"encoding/base64"
 	"fmt"
 	"net"
 	"net/http"
@@ -28,7 +27,7 @@ func setPACRunning(localIP string, proxyPort int) {
 	c := getConfig()
 	proxy := fmt.Sprintf(`"PROXY %s:%d; DIRECT"`, localIP, proxyPort)
 	var body string
-	if c.AdBlockEnabled || !c.BypassEnabled || len(c.BypassDomains) == 0 {
+	if !c.BypassEnabled || len(c.BypassDomains) == 0 {
 		body = fmt.Sprintf(`function FindProxyForURL(url,host){return %s;}`, proxy)
 	} else {
 		var sb strings.Builder
@@ -153,28 +152,6 @@ func buildPACMux(localIP string, port int) *http.ServeMux {
 		w.Write(png)
 	})
 
-	mux.HandleFunc("/ca.crt", func(w http.ResponseWriter, r *http.Request) {
-		cert, _ := getCA()
-		if cert == nil {
-			http.Error(w, "CA henüz hazır değil", http.StatusServiceUnavailable)
-			return
-		}
-		w.Header().Set("Content-Type", "application/x-x509-ca-cert")
-		w.Header().Set("Content-Disposition", `attachment; filename="lunaproxy-ca.crt"`)
-		w.Write(cert.Raw)
-	})
-
-	mux.HandleFunc("/ca.mobileconfig", func(w http.ResponseWriter, r *http.Request) {
-		cert, _ := getCA()
-		if cert == nil {
-			http.Error(w, "CA henüz hazır değil", http.StatusServiceUnavailable)
-			return
-		}
-		w.Header().Set("Content-Type", "application/x-apple-aspen-config")
-		w.Header().Set("Content-Disposition", `attachment; filename="lunaproxy-ca.mobileconfig"`)
-		fmt.Fprintf(w, mobileConfigTemplate, base64.StdEncoding.EncodeToString(cert.Raw))
-	})
-
 	setupURL := fmt.Sprintf("http://%s:%d/setup", localIP, port)
 	_ = setupURL
 
@@ -184,8 +161,7 @@ func buildPACMux(localIP string, port int) *http.ServeMux {
 	mux.HandleFunc("/setup", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
 		w.Header().Set("Cache-Control", "no-store")
-		caURL := fmt.Sprintf("http://%s:%d/ca.mobileconfig", localIP, port)
-		fmt.Fprintf(w, setupPageHTML, routerPACURL, pacURL, caURL)
+		fmt.Fprintf(w, setupPageHTML, routerPACURL, pacURL)
 	})
 
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
@@ -194,49 +170,6 @@ func buildPACMux(localIP string, port int) *http.ServeMux {
 
 	return mux
 }
-
-const mobileConfigTemplate = `<?xml version="1.0" encoding="UTF-8"?>
-<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-<plist version="1.0">
-<dict>
-  <key>PayloadContent</key>
-  <array>
-    <dict>
-      <key>PayloadCertificateFileName</key>
-      <string>lunaproxy-ca.crt</string>
-      <key>PayloadContent</key>
-      <data>%s</data>
-      <key>PayloadDescription</key>
-      <string>LunaProxy reklam engelleme icin kok sertifika</string>
-      <key>PayloadDisplayName</key>
-      <string>LunaProxy Root CA</string>
-      <key>PayloadIdentifier</key>
-      <string>com.lunaproxy.ca</string>
-      <key>PayloadType</key>
-      <string>com.apple.security.root</string>
-      <key>PayloadUUID</key>
-      <string>A1B2C3D4-E5F6-4A5B-8C9D-0E1F2A3B4C5D</string>
-      <key>PayloadVersion</key>
-      <integer>1</integer>
-    </dict>
-  </array>
-  <key>PayloadDescription</key>
-  <string>LunaProxy reklam engelleme kok sertifikasi</string>
-  <key>PayloadDisplayName</key>
-  <string>LunaProxy CA</string>
-  <key>PayloadIdentifier</key>
-  <string>com.lunaproxy.profile</string>
-  <key>PayloadRemovalDisallowed</key>
-  <false/>
-  <key>PayloadType</key>
-  <string>Configuration</string>
-  <key>PayloadUUID</key>
-  <string>B2C3D4E5-F6A7-4B5C-9D0E-1F2A3B4C5D6E</string>
-  <key>PayloadVersion</key>
-  <integer>1</integer>
-</dict>
-</plist>
-`
 
 const setupPageHTML = `<!DOCTYPE html>
 <html lang="tr"><head><meta charset="UTF-8">
@@ -284,12 +217,6 @@ hr{border:none;border-top:1px solid #2A2240;margin:16px 0}
 <div class="step">Ayarlar → Wi-Fi → Bağli ağin yanindaki (i)</div>
 <div class="step">HTTP Proxy → Otomatik</div>
 <div class="step">URL alani → yapistir → Kaydet</div></div>
-<div class="section"><h2>Reklam Engelleme (opsiyonel)</h2>
-<div class="step">Once uygulamada Ayarlar - Reklam Engelleme'yi acin</div>
-<div class="step">iOS: asagidaki butonla CA profilini indirin, Ayarlar - Genel - VPN ve Cihaz Yonetimi'nden yukleyin</div>
-<div class="step">Ayarlar - Genel - Bilgi - Sertifika Guven Ayarlari - LunaProxy CA'yi acin</div>
-</div>
-<a href="%s" style="display:block;text-align:center;padding:11px;border-radius:8px;background:linear-gradient(135deg,#8B3FBF,#6B21A8);color:#fff;font-size:13px;font-weight:700;text-decoration:none;margin-bottom:18px">CA Sertifikasini Indir (iOS)</a>
 <div class="section"><h2>Windows</h2>
 <div class="step">Ayarlar → Ağ ve Internet → Proxy</div>
 <div class="step">Kurulum betigi kullan → URL alanina yapistir → Kaydet</div></div>

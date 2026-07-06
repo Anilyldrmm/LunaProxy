@@ -1056,27 +1056,6 @@ window.addEventListener('DOMContentLoaded', function() {
           <textarea id="inp-bypass" class="bypass-ta" placeholder="discord.com&#10;roblox.com&#10;youtube.com" oninput="updateBypassCount()"></textarea>
           <div style="font-size:10px;color:var(--sub);margin-top:4px;text-align:right" id="bypass-count">0 domain</div>
         </div>
-        <div class="card" id="adblock-card">
-          <div class="card-title" style="margin-bottom:6px">Reklam Engelleme (Beta)</div>
-          <div style="font-size:11px;color:var(--sub);margin-bottom:10px;line-height:1.6">
-            Proxy'den geçen HTTPS trafiğini deşifre edip bilinen reklam/tracker isteklerini engeller.
-            Açıldığında tüm trafik proxy üzerinden geçer (yukarıdaki domain filtresi devre dışı kalır).
-            iOS'ta CA sertifikasını /setup sayfasından kurup elle güvenmeniz gerekir.
-          </div>
-          <div class="sw-row" style="margin-bottom:12px">
-            <div>
-              <div class="sw-label">Reklam Engellemeyi Aç</div>
-              <div class="sw-sub">CA kurulu değilse /setup sayfasından kurulum gerekir</div>
-            </div>
-            <label class="sw"><input type="checkbox" id="sw-adblock-enabled"><div class="sw-track"></div></label>
-          </div>
-          <div class="card-title" style="margin-bottom:6px;font-size:11px">MITM'den Muaf Domainler</div>
-          <div style="font-size:10px;color:var(--sub);margin-bottom:8px">
-            Bankacılık/ödeme gibi sertifika sabitleyen (pinning) siteler — bu liste deşifre edilmez.
-          </div>
-          <textarea id="inp-mitm-exempt" class="bypass-ta" placeholder="bankaniz.com.tr&#10;paypal.com" oninput="updateMitmExemptCount()"></textarea>
-          <div style="font-size:10px;color:var(--sub);margin-top:4px;text-align:right" id="mitm-exempt-count">0 domain</div>
-        </div>
         <button class="save-btn" onclick="saveSettings()">Kaydet</button>
       </div>
 
@@ -1166,16 +1145,12 @@ function savedAnim(btn){
 function saveSettings() {
   var bypassRaw = (document.getElementById('inp-bypass') || {value:''}).value || '';
   var bypassDomains = bypassRaw.split('\n').map(function(s){return s.trim();}).filter(Boolean);
-  var mitmExemptRaw = (document.getElementById('inp-mitm-exempt') || {value:''}).value || '';
-  var mitmExemptDomains = mitmExemptRaw.split('\n').map(function(s){return s.trim();}).filter(Boolean);
   var cfg = {
     dpi_mode: (document.querySelector('.radio-item.sel[data-val]') || {dataset:{val:'balanced'}}).dataset.val || 'balanced',
     isp: (document.getElementById('sel-isp') || {value:'auto'}).value || 'auto',
     dns_mode: (document.getElementById('sel-dns') || {value:'unchanged'}).value || 'unchanged',
     bypass_enabled: !!(document.getElementById('sw-bypass-enabled') || {}).checked,
     bypass_domains: bypassDomains,
-    adblock_enabled: !!(document.getElementById('sw-adblock-enabled') || {}).checked,
-    mitm_exempt_domains: mitmExemptDomains,
     set_system_proxy: !!(document.getElementById('sw-sysproxy') || {}).checked,
     auto_start: !!(document.getElementById('sw-autostart') || {}).checked,
     proxy_auto_start: !!(document.getElementById('sw-proxy-autostart') || {}).checked,
@@ -1456,14 +1431,6 @@ function updateBypassCount() {
   cnt.textContent = n + ' domain';
 }
 
-function updateMitmExemptCount() {
-  var ta = document.getElementById('inp-mitm-exempt');
-  var cnt = document.getElementById('mitm-exempt-count');
-  if (!ta || !cnt) return;
-  var n = ta.value.split('\n').map(function(s){return s.trim();}).filter(Boolean).length;
-  cnt.textContent = n + ' domain';
-}
-
 function applyISPSuggestion() {
   if (!_ispSuggestMode) return;
   document.querySelectorAll('.radio-item[data-val]').forEach(function(el) {
@@ -1703,15 +1670,6 @@ function loadSettings(cfg) {
     var domains = cfg.bypass_domains||cfg.BypassDomains||[];
     bypassTa.value = Array.isArray(domains) ? domains.join('\n') : (domains||'');
     updateBypassCount();
-  }
-  var adblockEnabled = !!(cfg.adblock_enabled !== undefined ? cfg.adblock_enabled : cfg.AdBlockEnabled);
-  var swAdblock = document.getElementById('sw-adblock-enabled');
-  if (swAdblock) swAdblock.checked = adblockEnabled;
-  var mitmTa = document.getElementById('inp-mitm-exempt');
-  if (mitmTa) {
-    var mitmDomains = cfg.mitm_exempt_domains||cfg.MITMExemptDomains||[];
-    mitmTa.value = Array.isArray(mitmDomains) ? mitmDomains.join('\n') : (mitmDomains||'');
-    updateMitmExemptCount();
   }
   var tsEnabled = !!(cfg.tailscale_enabled !== undefined ? cfg.tailscale_enabled : (cfg.TailscaleEnabled !== undefined ? cfg.TailscaleEnabled : false));
   var swTs = document.getElementById('sw-tailscale');

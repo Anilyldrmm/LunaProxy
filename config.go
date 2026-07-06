@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"strings"
 	"sync"
 )
 
@@ -43,10 +42,6 @@ type Config struct {
 	// Tailscale (opsiyonel — varsayılan kapalı)
 	TailscaleEnabled bool `json:"tailscale_enabled"`
 
-	// Reklam Engelleme (MITM) — varsayılan kapalı, CA kurulumu ekstra adım gerektirir
-	AdBlockEnabled    bool     `json:"adblock_enabled"`
-	MITMExemptDomains []string `json:"mitm_exempt_domains"`
-
 	// UI
 	Theme string `json:"theme"` // "neutral" | "purple"
 }
@@ -69,17 +64,6 @@ var defaultBypassDomains = []string{
 	"rbxtrk.com",
 	"apis.roblox.com",
 	"assetdelivery.roblox.com",
-}
-
-// defaultMITMExemptDomains — AdBlock MITM'inden muaf tutulan varsayılan domain'ler
-// (bankacılık/ödeme + cert-pinning riski yüksek Apple/Google servisleri).
-var defaultMITMExemptDomains = []string{
-	"ziraatbank.com.tr", "isbank.com.tr", "garantibbva.com.tr", "akbank.com",
-	"yapikredi.com.tr", "denizbank.com", "enpara.com", "ing.com.tr",
-	"qnbfinansbank.com", "teb.com.tr", "halkbank.com.tr", "vakifbank.com.tr",
-	"paypal.com", "stripe.com",
-	"apple.com", "icloud.com", "gvt1.com", "gvt2.com",
-	"googleapis.com", "google.com", "gstatic.com",
 }
 
 // ── DPI Modları ───────────────────────────────────────────────────────────────
@@ -133,17 +117,16 @@ var (
 
 func defaultConfig() Config {
 	return Config{
-		ProxyPort:         8888,
-		PACPort:           8080,
-		DPIMode:           "balanced",
-		ChunkSize:         40,
-		ISP:               "auto",
-		DNSMode:           "unchanged",
-		DPISource:         "auto",
-		SetSystemProxy:    false,
-		BypassEnabled:     true,
-		BypassDomains:     defaultBypassDomains,
-		MITMExemptDomains: defaultMITMExemptDomains,
+		ProxyPort:      8888,
+		PACPort:        8080,
+		DPIMode:        "balanced",
+		ChunkSize:      40,
+		ISP:            "auto",
+		DNSMode:        "unchanged",
+		DPISource:      "auto",
+		SetSystemProxy: false,
+		BypassEnabled:  true,
+		BypassDomains:  defaultBypassDomains,
 	}
 }
 
@@ -176,9 +159,6 @@ func loadConfig() {
 		if !fileExists {
 			c.BypassEnabled = true
 		}
-	}
-	if c.MITMExemptDomains == nil {
-		c.MITMExemptDomains = defaultMITMExemptDomains
 	}
 	cfgMu.Lock()
 	current = c
@@ -239,19 +219,4 @@ func activeGDPIFlags() string {
 	}
 
 	return flags
-}
-
-// isMITMExempt — host (veya alt-domaini) MITMExemptDomains listesinde mi kontrol eder.
-func isMITMExempt(host string) bool {
-	host = strings.ToLower(host)
-	for _, d := range getConfig().MITMExemptDomains {
-		d = strings.ToLower(strings.TrimSpace(d))
-		if d == "" {
-			continue
-		}
-		if host == d || strings.HasSuffix(host, "."+d) {
-			return true
-		}
-	}
-	return false
 }

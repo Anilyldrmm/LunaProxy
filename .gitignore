@@ -8,7 +8,6 @@
 
 # Logs
 *.txt
-!assets/filters/*.txt
 *.log
 
 # Claude Code / geliştirme iç dosyaları
@@ -29,6 +28,5 @@ installer/Output/
 ssh_*.py
 *_debug.*
 *_test.*
-!*_test.go
 *_dbg.*
 cmd_diag/
