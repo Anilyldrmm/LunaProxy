@@ -8,7 +8,6 @@ import (
 	"io"
 	"net"
 	"net/http"
-	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -484,8 +483,16 @@ func injectCosmeticCSS(resp *http.Response, host string) {
 	newBody = append(newBody, style...)
 	newBody = append(newBody, body[idx+len("</head>"):]...)
 
-	resp.Body = io.NopCloser(bytes.NewReader(newBody))
-	resp.ContentLength = int64(len(newBody))
-	resp.Header.Set("Content-Length", strconv.Itoa(len(newBody)))
+	// newBody sadece ilk 2MB'lık ön ekten oluşuyor — gerçek gövde daha
+	// büyükse resp.Body'de hâlâ okunmamış kuyruk vardır. Onu MultiReader ile
+	// zincirleyerek hem veri kaybını önlüyoruz hem de alttaki bağlantıyı
+	// tam olarak boşaltıp bir sonraki keep-alive isteğinin doğru
+	// ayrıştırılmasını garanti ediyoruz. Nihai uzunluk önceden bilinemediği
+	// için ContentLength=-1 ve Transfer-Encoding: chunked kullanılıyor —
+	// (*http.Response).Write bunu otomatik olarak chunked olarak yazar.
+	resp.Body = io.NopCloser(io.MultiReader(bytes.NewReader(newBody), resp.Body))
+	resp.ContentLength = -1
+	resp.TransferEncoding = []string{"chunked"}
+	resp.Header.Del("Content-Length")
 	resp.Header.Del("Transfer-Encoding")
 }

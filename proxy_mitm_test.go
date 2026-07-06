@@ -31,8 +31,61 @@ func TestInjectCosmeticCSS_InsertsBeforeHeadClose(t *testing.T) {
 	if !bytes.Contains(out, []byte("</head>")) {
 		t.Error("</head> etiketi kayboldu")
 	}
-	if resp.Header.Get("Content-Length") != strconv.Itoa(len(out)) {
-		t.Errorf("Content-Length güncellenmedi: got %s, beklenen %d", resp.Header.Get("Content-Length"), len(out))
+	// Enjeksiyon sonrası nihai uzunluk artık önceden bilinmiyor (kalan gövde
+	// akıştan geliyor olabilir) — Content-Length header'ı kaldırılıp yerine
+	// chunked framing kullanılmalı.
+	if resp.Header.Get("Content-Length") != "" {
+		t.Errorf("Content-Length header'ı silinmeliydi, got %q", resp.Header.Get("Content-Length"))
+	}
+	if resp.ContentLength != -1 {
+		t.Errorf("resp.ContentLength=-1 olmalıydı, got %d", resp.ContentLength)
+	}
+	if len(resp.TransferEncoding) != 1 || resp.TransferEncoding[0] != "chunked" {
+		t.Errorf("resp.TransferEncoding=[\"chunked\"] olmalıydı, got %v", resp.TransferEncoding)
+	}
+}
+
+// TestInjectCosmeticCSS_LargeBody_StreamsRemainderAfterHeadClose — </head>
+// ilk 2MB'lık ön ek içinde bulunuyor ama gerçek gövde 2MB sınırının çok
+// ötesine geçiyor. Enjeksiyondan sonra resp.Body hâlâ okunmamış orijinal
+// kuyruğu (LimitReader'ın arkasında kalan kısmı) içermeli; hiçbir byte
+// kaybolmamalı ve alttaki stream tamamen boşaltılabilmeli.
+func TestInjectCosmeticCSS_LargeBody_StreamsRemainderAfterHeadClose(t *testing.T) {
+	adblock, _ = newAdblockEngine("big.example.org##.ad-banner")
+
+	head := "<html><head><title>t</title></head>"
+	const padLen = 3 * 1024 * 1024 // 3MB — 2MB sınırının kesinlikle ötesinde
+	pad := strings.Repeat("A", padLen)
+	body := head + "<body>" + pad + "</body></html>"
+
+	resp := &http.Response{
+		Header: http.Header{"Content-Type": {"text/html; charset=utf-8"}},
+		Body:   io.NopCloser(strings.NewReader(body)),
+	}
+
+	injectCosmeticCSS(resp, "big.example.org")
+
+	out, err := io.ReadAll(resp.Body)
+	if err != nil {
+		t.Fatalf("gövde okunamadı: %v", err)
+	}
+
+	styleSnippet := "<style>" + ".ad-banner{display:none!important}" + "</style>"
+	if n := bytes.Count(out, []byte(styleSnippet)); n != 1 {
+		t.Errorf("style bloğu tam olarak 1 kez görünmeliydi, got %d kez", n)
+	}
+	if idx := bytes.Index(out, []byte(styleSnippet)); idx < 0 || idx > bytes.Index(out, []byte("</head>")) {
+		t.Error("style bloğu </head>'ten önce olmalıydı")
+	}
+
+	wantLen := len(body) + len(styleSnippet)
+	if len(out) != wantLen {
+		t.Errorf("toplam uzunluk yanlış: got %d, beklenen %d (orijinal %d + style %d)", len(out), wantLen, len(body), len(styleSnippet))
+	}
+
+	// Padding'in tamamı, bozulmadan </head> sonrasında bulunmalı.
+	if !bytes.Contains(out, []byte(pad)) {
+		t.Error("3MB'lık padding gövdede eksiksiz bulunamadı — veri kaybı var")
 	}
 }
 
