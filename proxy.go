@@ -237,14 +237,38 @@ func passthroughConnect(w http.ResponseWriter, r *http.Request, ip string) {
 		http.Error(w, "hijack desteklenmiyor", http.StatusInternalServerError)
 		return
 	}
-	src, _, err := hj.Hijack()
+	src, rw, err := hj.Hijack()
 	if err != nil {
 		dst.Close()
 		return
 	}
 
 	src.Write([]byte("HTTP/1.1 200 Connection Established\r\n\r\n"))
-	rawTunnel(src, dst, ip)
+	rawTunnel(&bufferedConn{r: rw.Reader, Conn: src}, dst, ip)
+}
+
+// bufferedConn — Hijack()'ten gelen bufio.Reader'daki (varsa) önceden
+// okunmuş byte'ları kaybetmeden ham tünele geçmek için kullanılır.
+type bufferedConn struct {
+	r *bufio.Reader
+	net.Conn
+}
+
+func (b *bufferedConn) Read(p []byte) (int, error) {
+	return b.r.Read(p)
+}
+
+// countingWriter — Write edilen gercek byte sayisini tutar (Content-Length
+// veya chunked framing'den bagimsiz, stats/device takibi icin).
+type countingWriter struct {
+	io.Writer
+	n int64
+}
+
+func (c *countingWriter) Write(p []byte) (int, error) {
+	n, err := c.Writer.Write(p)
+	c.n += int64(n)
+	return n, err
 }
 
 // rawTunnel — iki bağlantı arasında ham byte kopyası yapar (bufPool'lu),
@@ -314,9 +338,20 @@ func handleHTTP(w http.ResponseWriter, r *http.Request) {
 // mitmConnect — AdBlockEnabled=true ve host MITM-exempt değilken çalışır.
 // Hedefe TLS handshake başarısız olursa (örn. cert pinning) ham tünele düşer.
 func mitmConnect(w http.ResponseWriter, r *http.Request, ip, host string) {
-	dst, err := tls.Dial("tcp", r.Host, &tls.Config{ServerName: host, NextProtos: []string{"http/1.1"}})
+	dst, err := tls.DialWithDialer(&net.Dialer{Timeout: 15 * time.Second}, "tcp", r.Host, &tls.Config{ServerName: host, NextProtos: []string{"http/1.1"}})
 	if err != nil {
 		logWarn(fmt.Sprintf("MITM %s → hedef TLS reddetti, ham tünele düşülüyor: %v", host, err))
+		passthroughConnect(w, r, ip)
+		return
+	}
+
+	// Leaf sertifikayı istemciyi hijack etmeden ÖNCE üret — istemciye
+	// "200 Connection Established" söylendikten sonra artık ham pass-through'a
+	// dönülemez (istemci fake sertifika bekliyor olur), o yüzden hata burada
+	// yakalanmalı.
+	if _, err := leafCertFor(host); err != nil {
+		dst.Close()
+		logWarn(fmt.Sprintf("MITM %s → leaf sertifika üretilemedi, ham tünele düşülüyor: %v", host, err))
 		passthroughConnect(w, r, ip)
 		return
 	}
@@ -348,12 +383,14 @@ func mitmConnect(w http.ResponseWriter, r *http.Request, ip, host string) {
 			return leafCertFor(name)
 		},
 	})
+	clientRaw.SetDeadline(time.Now().Add(15 * time.Second))
 	if err := clientTLS.Handshake(); err != nil {
 		clientTLS.Close()
 		dst.Close()
 		logWarn(fmt.Sprintf("MITM %s → istemci TLS handshake hatası: %v", host, err))
 		return
 	}
+	clientRaw.SetDeadline(time.Time{})
 	defer clientTLS.Close()
 	defer dst.Close()
 
@@ -377,7 +414,8 @@ func mitmConnect(w http.ResponseWriter, r *http.Request, ip, host string) {
 
 		req.Header.Set("Accept-Encoding", "identity")
 		req.RequestURI = ""
-		if err := req.Write(dst); err != nil {
+		reqCW := &countingWriter{Writer: dst}
+		if err := req.Write(reqCW); err != nil {
 			return
 		}
 
@@ -390,19 +428,19 @@ func mitmConnect(w http.ResponseWriter, r *http.Request, ip, host string) {
 			injectCosmeticCSS(resp, host)
 		}
 
-		n := resp.ContentLength
-		if err := resp.Write(clientTLS); err != nil {
+		respCW := &countingWriter{Writer: clientTLS}
+		if err := resp.Write(respCW); err != nil {
 			resp.Body.Close()
 			return
 		}
 		resp.Body.Close()
-		if n > 0 {
-			stats.addBytes(n)
-			trackDevice(ip, n)
+		if total := reqCW.n + respCW.n; total > 0 {
+			stats.addBytes(total)
+			trackDevice(ip, total)
 		}
 
 		if resp.StatusCode == http.StatusSwitchingProtocols {
-			rawTunnel(clientTLS, dst, ip)
+			rawTunnel(&bufferedConn{r: clientBR, Conn: clientTLS}, &bufferedConn{r: serverBR, Conn: dst}, ip)
 			return
 		}
 		if req.Close || resp.Close {
@@ -428,23 +466,26 @@ func injectCosmeticCSS(resp *http.Response, host string) {
 		return
 	}
 	body, err := io.ReadAll(io.LimitReader(resp.Body, 2<<20))
-	resp.Body.Close()
 	if err != nil {
-		resp.Body = io.NopCloser(bytes.NewReader(body))
+		resp.Body = io.NopCloser(io.MultiReader(bytes.NewReader(body), resp.Body))
+		return
+	}
+
+	idx := bytes.LastIndex(body, []byte("</head>"))
+	if idx < 0 {
+		// </head> bulunamadi (govde limit disinda kalmis olabilir) — govdeye dokunma, oldugu gibi ilet
+		resp.Body = io.NopCloser(io.MultiReader(bytes.NewReader(body), resp.Body))
 		return
 	}
 
 	style := []byte("<style>" + strings.Join(selectors, ",") + "{display:none!important}</style></head>")
-	if idx := bytes.LastIndex(body, []byte("</head>")); idx >= 0 {
-		newBody := make([]byte, 0, len(body)+len(style))
-		newBody = append(newBody, body[:idx]...)
-		newBody = append(newBody, style...)
-		newBody = append(newBody, body[idx+len("</head>"):]...)
-		body = newBody
-	}
+	newBody := make([]byte, 0, len(body)+len(style))
+	newBody = append(newBody, body[:idx]...)
+	newBody = append(newBody, style...)
+	newBody = append(newBody, body[idx+len("</head>"):]...)
 
-	resp.Body = io.NopCloser(bytes.NewReader(body))
-	resp.ContentLength = int64(len(body))
-	resp.Header.Set("Content-Length", strconv.Itoa(len(body)))
+	resp.Body = io.NopCloser(bytes.NewReader(newBody))
+	resp.ContentLength = int64(len(newBody))
+	resp.Header.Set("Content-Length", strconv.Itoa(len(newBody)))
 	resp.Header.Del("Transfer-Encoding")
 }
