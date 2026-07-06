@@ -206,11 +206,23 @@ func handleConnect(w http.ResponseWriter, r *http.Request) {
 
 	host := hostOnly(r.Host)
 	c := getConfig()
-	if c.AdBlockEnabled && !isMITMExempt(host) {
+	if shouldMITM(c, host) {
 		mitmConnect(w, r, ip, host)
 		return
 	}
 	passthroughConnect(w, r, ip)
+}
+
+// shouldMITM — bir CONNECT isteğinin MITM yoluna mı yoksa ham tünele mi
+// düşeceğine karar verir. AdBlock açık ve host MITM-exempt olmasa bile,
+// MITM ön koşulları (CA başlangıçta yüklenmiş/üretilmiş, adblock motoru
+// başlangıçta parse edilmiş) hazır değilse ham tünele düşülür — aksi halde
+// mitmCACert==nil iken leafCertFor→x509.CreateCertificate her bağlantıda
+// panic'e (net/http tarafından recover edilir ama bağlantı başarısız olur)
+// yol açar ve adblock==nil iken MITM etmenin hiçbir filtreleme faydası
+// olmadan gereksiz risk/overhead eklemekten başka anlamı kalmaz.
+func shouldMITM(c Config, host string) bool {
+	return c.AdBlockEnabled && mitmCACert != nil && adblock != nil && !isMITMExempt(host)
 }
 
 // passthroughConnect — ham TCP tünel (MITM-exempt host'lar ve AdBlock

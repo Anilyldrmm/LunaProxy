@@ -3,6 +3,7 @@ package main
 import (
 	"bufio"
 	"bytes"
+	"crypto/x509"
 	"io"
 	"net"
 	"net/http"
@@ -212,6 +213,104 @@ func TestCountingWriter_CountsBytesWrittenRegardlessOfFraming(t *testing.T) {
 	}
 	if buf.String() != "abcdefgh" {
 		t.Errorf("underlying writer'a doğru yazılmadı, got %q", buf.String())
+	}
+}
+
+// TestShouldMITM_FallsBackToPassthrough_WhenPrerequisitesNotReady —
+// handleConnect'in MITM dispatch koşulunu doğrudan test eder: AdBlockEnabled
+// açık olsa ve host exempt olmasa bile, CA başlangıçta yüklenemediyse
+// (mitmCACert==nil) ya da adblock motoru parse edilemediyse (adblock==nil),
+// shouldMITM false dönmeli — böylece handleConnect ham tünele
+// (passthroughConnect) düşer, mitmConnect→leafCertFor→x509.CreateCertificate
+// nil CA ile panic'e yol açmaz.
+func TestShouldMITM_FallsBackToPassthrough_WhenPrerequisitesNotReady(t *testing.T) {
+	origCA, origKey := mitmCACert, mitmCAKey
+	origAdblock := adblock
+	defer func() { mitmCACert, mitmCAKey = origCA, origKey; adblock = origAdblock }()
+
+	dummyCert := &x509.Certificate{}
+	dummyAdblock, err := newAdblockEngine("")
+	if err != nil {
+		t.Fatalf("test adblock motoru oluşturulamadı: %v", err)
+	}
+
+	// isMITMExempt paket-seviyesindeki global `current` konfigürasyonunu okur —
+	// host'un kesinlikle exempt sayılmamasını garanti etmek için boş bir
+	// MITMExemptDomains ile sabitliyoruz (config_test.go'daki save/restore deseni).
+	cfgMu.Lock()
+	saved := current
+	current = Config{MITMExemptDomains: nil}
+	cfgMu.Unlock()
+	t.Cleanup(func() {
+		cfgMu.Lock()
+		current = saved
+		cfgMu.Unlock()
+	})
+
+	cfg := Config{AdBlockEnabled: true}
+	host := "not-exempt.example.org"
+
+	cases := []struct {
+		name       string
+		ca         *x509.Certificate
+		ab         *adblockEngine
+		wantMITM   bool
+		wantReason string
+	}{
+		{"CA hazır + adblock hazır → MITM", dummyCert, dummyAdblock, true, "her iki ön koşul da hazır"},
+		{"CA nil → ham tünel", nil, dummyAdblock, false, "mitmCACert nil"},
+		{"adblock nil → ham tünel", dummyCert, nil, false, "adblock nil"},
+		{"ikisi de nil → ham tünel", nil, nil, false, "ikisi de nil"},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			mitmCACert = tc.ca
+			adblock = tc.ab
+			got := shouldMITM(cfg, host)
+			if got != tc.wantMITM {
+				t.Errorf("shouldMITM() = %v, beklenen %v (%s)", got, tc.wantMITM, tc.wantReason)
+			}
+		})
+	}
+}
+
+// TestShouldMITM_RespectsAdBlockDisabledAndExemptHost — mevcut davranışın
+// (AdBlockEnabled=false veya exempt host) bu değişiklikle bozulmadığını
+// doğrular.
+func TestShouldMITM_RespectsAdBlockDisabledAndExemptHost(t *testing.T) {
+	origCA, origKey := mitmCACert, mitmCAKey
+	origAdblock := adblock
+	defer func() { mitmCACert, mitmCAKey = origCA, origKey; adblock = origAdblock }()
+
+	mitmCACert = &x509.Certificate{}
+	var errAb error
+	adblock, errAb = newAdblockEngine("")
+	if errAb != nil {
+		t.Fatalf("test adblock motoru oluşturulamadı: %v", errAb)
+	}
+
+	// isMITMExempt paket-seviyesindeki global `current` konfigürasyonunu
+	// okur (shouldMITM'e geçilen cfg parametresini değil) — config_test.go'daki
+	// TestIsMITMExempt ile aynı save/restore deseni kullanılıyor.
+	cfgMu.Lock()
+	saved := current
+	current = Config{MITMExemptDomains: []string{"apple.com"}}
+	cfgMu.Unlock()
+	t.Cleanup(func() {
+		cfgMu.Lock()
+		current = saved
+		cfgMu.Unlock()
+	})
+
+	if shouldMITM(Config{AdBlockEnabled: false}, "not-exempt.example.org") {
+		t.Error("AdBlockEnabled=false iken shouldMITM true dönmemeliydi")
+	}
+	if shouldMITM(Config{AdBlockEnabled: true}, "apple.com") {
+		t.Error("MITM-exempt host için shouldMITM true dönmemeliydi")
+	}
+	if !shouldMITM(Config{AdBlockEnabled: true}, "not-exempt.example.org") {
+		t.Error("exempt olmayan host + hazır ön koşullarla shouldMITM true dönmeliydi")
 	}
 }
 
