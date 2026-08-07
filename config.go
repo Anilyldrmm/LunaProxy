@@ -70,9 +70,9 @@ var defaultBypassDomains = []string{
 
 // dpiModeFlags — chunk size yer tutucusu %d içerir
 var dpiModeFlags = map[string]string{
-	"turbo":    "-p -q -r -s -e %d",
-	"balanced": "-1 -p -q -r -s -e %d --new-mode",
-	"powerful": "-1 -p -q -r -s -e %d --new-mode --set-ttl 3 --wrong-chksum",
+	"turbo":    "-q -r -s -e %d",
+	"balanced": "-1 -q -r -s -e %d --new-mode",
+	"powerful": "-1 -q -r -s -e %d --new-mode --set-ttl 3 --wrong-chksum",
 }
 
 var dpiModeNames = map[string]string{
