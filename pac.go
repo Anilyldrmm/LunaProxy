@@ -20,18 +20,27 @@ var (
 	pacBody = `function FindProxyForURL(url,host){return "DIRECT";}`
 )
 
+// localNetException — LAN/local hedefleri (MacroDeck gibi PC üzerindeki
+// WebSocket/HTTP sunucular dahil) her zaman DIRECT'e gönderir. Bu istisna
+// olmadan telefon aynı ağdaki cihazlara bile proxy üzerinden bağlanmaya
+// çalışır — WebSocket upgrade bu proxy'den sağlıklı geçmediği için
+// MacroDeck gibi yerel LAN servisleri proxy açıkken çalışmaz kalır.
+const localNetException = `if(isPlainHostName(host)||shExpMatch(host,"*.local")||isInNet(host,"127.0.0.0","255.0.0.0")||isInNet(host,"10.0.0.0","255.0.0.0")||isInNet(host,"172.16.0.0","255.240.0.0")||isInNet(host,"192.168.0.0","255.255.0.0")||isInNet(host,"169.254.0.0","255.255.0.0"))return "DIRECT";`
+
 // setPACRunning — proxy açıkken PAC'ı proxy+DIRECT moduna alır.
 // BypassEnabled=true ve BypassDomains doluysa sadece o domain'ler proxy'den geçer;
-// aksi takdirde tüm trafik proxy'den geçer.
+// aksi takdirde tüm trafik proxy'den geçer. LAN hedefleri her iki modda da
+// (MacroDeck dahil) her zaman DIRECT gider.
 func setPACRunning(localIP string, proxyPort int) {
 	c := getConfig()
 	proxy := fmt.Sprintf(`"PROXY %s:%d; DIRECT"`, localIP, proxyPort)
 	var body string
 	if !c.BypassEnabled || len(c.BypassDomains) == 0 {
-		body = fmt.Sprintf(`function FindProxyForURL(url,host){return %s;}`, proxy)
+		body = fmt.Sprintf(`function FindProxyForURL(url,host){%sreturn %s;}`, localNetException, proxy)
 	} else {
 		var sb strings.Builder
 		sb.WriteString(`function FindProxyForURL(url,host){`)
+		sb.WriteString(localNetException)
 		for _, d := range c.BypassDomains {
 			d = strings.TrimSpace(d)
 			if d == "" {

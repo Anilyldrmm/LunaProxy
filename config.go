@@ -125,7 +125,7 @@ func defaultConfig() Config {
 		DNSMode:        "unchanged",
 		DPISource:      "auto",
 		SetSystemProxy: false,
-		BypassEnabled:  true,
+		BypassEnabled:  false,
 		BypassDomains:  defaultBypassDomains,
 	}
 }
@@ -140,9 +140,7 @@ func configFilePath() string {
 
 func loadConfig() {
 	c := defaultConfig()
-	fileExists := false
 	if data, err := os.ReadFile(configFilePath()); err == nil {
-		fileExists = true
 		json.Unmarshal(data, &c)
 	}
 	if c.ProxyPort == 0 { c.ProxyPort = 8888 }
@@ -151,14 +149,10 @@ func loadConfig() {
 	if c.ChunkSize == 0 { c.ChunkSize = 40 }
 	if c.ISP == "" { c.ISP = "auto" }
 	if c.DPISource == "" { c.DPISource = "auto" }
-	// Mevcut config'de bypass_domains yoksa varsayılanları yükle.
-	// Yeni kurulum ise BypassEnabled zaten defaultConfig'de true geldi.
-	// Eski kurulum (dosya var, alan yok) için mevcut davranış korunur: enabled=false.
+	// Mevcut config'de bypass_domains yoksa varsayılanları yükle (liste boşsa
+	// kullanıcı sonradan "Bypass" anahtarını açtığında dolu gelsin diye).
 	if c.BypassDomains == nil {
 		c.BypassDomains = defaultBypassDomains
-		if !fileExists {
-			c.BypassEnabled = true
-		}
 	}
 	cfgMu.Lock()
 	current = c
