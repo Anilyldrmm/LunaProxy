@@ -182,8 +182,10 @@ func isKeenetic(client *ssh.Client) bool {
 
 // sshExecNDM — Keenetic NDM CLI için 'exec <cmd>' wrapper.
 // Keenetic SSH exec'inde sh -c çalışmaz; NDM'nin kendi exec komutu kullanılır.
+// NDM çıktısı ANSI "\x1b[K" (erase-line) kodları içerir; temizlenmezse path olarak kullanılamaz.
 func sshExecNDM(client *ssh.Client, cmd string) (string, error) {
-	return sshRun(client, "exec "+cmd)
+	out, err := sshRun(client, "exec "+cmd)
+	return strings.TrimSpace(strings.ReplaceAll(out, "\x1b[K", "")), err
 }
 
 // sshWriteNDM — Keenetic'te dosya yazmak için 'exec tee <path>' + stdin kullanır.
