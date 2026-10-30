@@ -30,3 +30,6 @@ ssh_*.py
 *_test.*
 *_dbg.*
 cmd_diag/
+
+# Gömülü GoodbyeDPI/WinDivert çıkarma klasörü (exe yanında)
+bin/

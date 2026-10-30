@@ -2,9 +2,7 @@
 
 import (
 	"fmt"
-	"os"
 	"os/exec"
-	"path/filepath"
 	"strings"
 	"syscall"
 )
@@ -94,28 +92,11 @@ func ResolveDPI(c Config) (DPILaunchResult, error) {
 			}
 			return DPILaunchResult{Source: "bundle", ExePath: exePath}, nil
 		}
-		// Önceki sürümün extract ettiği binary varsa kullan
-		if cached := cachedGDPIPath(); cached != "" {
-			return DPILaunchResult{Source: "bundle", ExePath: cached}, nil
-		}
 		return DPILaunchResult{Source: "none"}, nil
 
 	default: // "internal", eski "auto" veya boş → dahili motor
 		return DPILaunchResult{Source: "internal"}, nil
 	}
-}
-
-// cachedGDPIPath — önceki build'in extract ettiği goodbyedpi.exe yolu (varsa).
-func cachedGDPIPath() string {
-	dir, err := os.UserConfigDir()
-	if err != nil {
-		return ""
-	}
-	p := filepath.Join(dir, "LunaProxy", "bin", "goodbyedpi.exe")
-	if _, err := os.Stat(p); err == nil {
-		return p
-	}
-	return ""
 }
 
 // hiddenOutput — komutu gizli pencere ile çalıştırır, stdout döner.

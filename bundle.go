@@ -1,10 +1,10 @@
-﻿//go:build withbundle
+//go:build withbundle
 
 package main
 
 import (
+	"bytes"
 	"embed"
-	"io"
 	"os"
 	"path/filepath"
 )
@@ -14,12 +14,16 @@ var bundledFS embed.FS
 
 func BundledGDPIAvailable() bool { return true }
 
+// ExtractBundledGDPI — gömülü GoodbyeDPI/WinDivert dosyalarını exe'nin yanındaki bin/ klasörüne çıkarır.
+// Yönetici olarak çalışan süreç bu DLL'i yükleyip exe'yi çalıştırdığı için kullanıcının yazabildiği
+// %AppData% kullanılmaz (sahte DLL ile yetki yükseltme); kurulumda exe Program Files'tadır, oraya
+// sadece yönetici yazabilir. Var olan dosyalar her seferinde gömülü kopyayla karşılaştırılır.
 func ExtractBundledGDPI() (string, error) {
-	dir, err := os.UserConfigDir()
+	exe, err := os.Executable()
 	if err != nil {
 		return "", err
 	}
-	binDir := filepath.Join(dir, "LunaProxy", "bin")
+	binDir := filepath.Join(filepath.Dir(exe), "bin")
 	if err := os.MkdirAll(binDir, 0755); err != nil {
 		return "", err
 	}
@@ -38,21 +42,14 @@ func ExtractBundledGDPI() (string, error) {
 	return filepath.Join(binDir, "goodbyedpi.exe"), nil
 }
 
+// extractFile — dst gömülü içerikle birebir aynı değilse (yok, eski sürüm veya değiştirilmiş) üzerine yazar.
 func extractFile(fs embed.FS, src, dst string) error {
-	if _, err := os.Stat(dst); err == nil {
+	want, err := fs.ReadFile(src)
+	if err != nil {
+		return err
+	}
+	if have, err := os.ReadFile(dst); err == nil && bytes.Equal(have, want) {
 		return nil
 	}
-	in, err := fs.Open(src)
-	if err != nil {
-		return err
-	}
-	defer in.Close()
-
-	out, err := os.Create(dst)
-	if err != nil {
-		return err
-	}
-	defer out.Close()
-	_, err = io.Copy(out, in)
-	return err
+	return os.WriteFile(dst, want, 0755)
 }
