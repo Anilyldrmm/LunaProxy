@@ -213,6 +213,9 @@ func showWindow() {
 		}
 		wvProcBringWindowToTop.Call(hwnd)
 		wvProcSetForegroundWindow.Call(hwnd)
+		// Windows arka plandaki süreçlerin SetForegroundWindow'unu sessizce reddedebiliyor;
+		// pencere görünür ama arkada kalıyor. SwitchToThisWindow bu kısıtlamaya takılmıyor.
+		wvProcSwitchToThisWindow.Call(hwnd, 1)
 	})
 }
 

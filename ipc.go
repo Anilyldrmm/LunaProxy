@@ -37,23 +37,7 @@ func handleIPCMessage(data string) {
 	}
 	switch msg.Type {
 	case "toggle":
-		// Önceki toggle bitmeden yeni birini başlatma
-		if !toggleBusy.CompareAndSwap(false, true) {
-			return
-		}
-		go func() {
-			defer toggleBusy.Store(false)
-			if g.running {
-				g.stop()
-			} else {
-				if err := g.start(); err != nil {
-					logError("Başlatma hatası: " + err.Error())
-					evalJS(fmt.Sprintf(`showError(%s)`, jsonEscape(err.Error())))
-				}
-			}
-			updateTrayState(g.running)
-			pushStatus()
-		}()
+		toggleProxy(!g.running)
 
 	case "saveSettings":
 		// UI kısmi payload gönderir; mevcut config üzerine yaz ki gönderilmeyen alanlar (gdpi_path vb.) silinmesin.

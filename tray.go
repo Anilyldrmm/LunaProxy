@@ -3,6 +3,7 @@
 package main
 
 import (
+	"fmt"
 	"os"
 	"time"
 
@@ -21,6 +22,8 @@ func initTray() {
 func onTrayReady() {
 	systray.SetIcon(trayIcon(false))
 	systray.SetTooltip("LunaProxy — DPI Bypass")
+	// Sol tık (tek veya çift) pencereyi açar; menü sağ tıkta (Windows tepsi standardı).
+	systray.SetOnTapped(showWindow)
 
 	mOpen := systray.AddMenuItem("Arayüzü Aç", "Pencereyi göster")
 	systray.AddSeparator()
@@ -51,15 +54,9 @@ func onTrayReady() {
 				case <-mOpen.ClickedCh:
 					showWindow()
 			case <-trayStart.ClickedCh:
-				if err := g.start(); err != nil {
-					logError("Tray başlatma hatası: " + err.Error())
-				}
-				updateTrayState(true)
-				pushStatus()
+				toggleProxy(true)
 			case <-trayStop.ClickedCh:
-				g.stop()
-				updateTrayState(false)
-				pushStatus()
+				toggleProxy(false)
 			case <-mUpdate.ClickedCh:
 				go func() {
 					tag, url, err := CheckUpdate()
@@ -87,6 +84,28 @@ func onTrayReady() {
 }
 
 func onTrayExit() {}
+
+// toggleProxy — proxy'yi arka planda başlatır/durdurur. Start/stop saniyeler sürebilir; çağıran
+// (tepsi döngüsü, UI) bloklanırsa o sürede gelen tıklamalar kaybolur ve uygulama donmuş görünür.
+// Tepsi ve UI aynı kilidi kullanır: önceki işlem bitmeden gelen istek yok sayılır.
+func toggleProxy(start bool) {
+	if !toggleBusy.CompareAndSwap(false, true) {
+		return
+	}
+	go func() {
+		defer toggleBusy.Store(false)
+		if start {
+			if err := g.start(); err != nil {
+				logError("Başlatma hatası: " + err.Error())
+				evalJS(fmt.Sprintf(`showError(%s)`, jsonEscape(err.Error())))
+			}
+		} else {
+			g.stop()
+		}
+		updateTrayState(g.running)
+		pushStatus()
+	}()
+}
 
 // updateTrayState — proxy durumuna göre tray ikonunu ve menüsünü günceller.
 func updateTrayState(running bool) {
