@@ -63,6 +63,10 @@ Filename: "{app}\{#AppExe}"; Flags: nowait runascurrentuser; Check: WizardSilent
 Filename: "taskkill"; Parameters: "/f /im {#AppExe}"; Flags: runhidden; RunOnceId: "KillApp"
 Filename: "schtasks"; Parameters: "/Delete /TN LunaProxy /F"; Flags: runhidden; RunOnceId: "DelStartupTask"
 
+[UninstallDelete]
+Type: filesandordirs; Name: "{app}\bin"
+Type: filesandordirs; Name: "{app}\update"
+
 [Code]
 // WebView2 Runtime kurulu mu kontrol et
 function WebView2Installed: Boolean;

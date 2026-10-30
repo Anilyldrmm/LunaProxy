@@ -104,10 +104,13 @@ func CheckUpdate() (tagName, downloadURL string, err error) {
 // Setup installer ise /VERYSILENT ile çalıştırır.
 // Raw exe ise PS1 replace script ile mevcut exe'yi değiştirir.
 func DownloadAndReplace(downloadURL string) error {
-	tmpDir := os.TempDir()
+	tmpDir, err := updateDir()
+	if err != nil {
+		return err
+	}
 
 	// URL'den dosya adını çıkar
-	urlBase := downloadURL[strings.LastIndex(downloadURL, "/")+1:]
+	urlBase := filepath.Base(downloadURL[strings.LastIndex(downloadURL, "/")+1:])
 	tmpFile := filepath.Join(tmpDir, urlBase)
 
 	resp, err := http.Get(downloadURL)
@@ -189,6 +192,21 @@ Remove-Item $ps1path -ErrorAction SilentlyContinue
 	}
 	os.Exit(0)
 	return nil
+}
+
+// updateDir — indirilen güncellemenin yazılacağı klasör. Yükseltilmiş süreç kullanıcının yazabildiği
+// %TEMP%'e indirip çalıştırırsa, aynı kullanıcıdaki bir süreç dosyayı arada değiştirip UAC sormadan
+// yönetici olur. Bu yüzden yükseltilmişken exe'nin yanına (kurulumda Program Files) yazılır.
+func updateDir() (string, error) {
+	if !windows.GetCurrentProcessToken().IsElevated() {
+		return os.TempDir(), nil // yetkisiz: installer zaten UAC onayıyla açılır
+	}
+	exe, err := os.Executable()
+	if err != nil {
+		return "", err
+	}
+	dir := filepath.Join(filepath.Dir(exe), "update")
+	return dir, os.MkdirAll(dir, 0o755)
 }
 
 // StartUpdateChecker — arka planda her 6 saatte bir güncelleme kontrol eder.
