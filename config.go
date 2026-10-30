@@ -22,7 +22,11 @@ type Config struct {
 
 	// GoodbyeDPI yönetimi
 	GDPIPath  string `json:"gdpi_path"`
-	DPISource string `json:"dpi_source"` // "auto" | "service" | "manual" | "disabled"
+	DPISource string `json:"dpi_source"` // "internal" | "gdpi_auto" | "service" | "manual" | "disabled"
+
+	// Dahili motor kapsamı: "proxy" (sadece proxy'den geçenler) | "pc" (tüm PC) | "apps" (seçili exe'ler)
+	DPIScope string   `json:"dpi_scope"`
+	DPIApps  []string `json:"dpi_apps"`
 
 	// DNS
 	DNSMode string `json:"dns_mode"` // unchanged | cloudflare | google | adguard | quad9 | opendns
@@ -65,6 +69,9 @@ var defaultBypassDomains = []string{
 	"apis.roblox.com",
 	"assetdelivery.roblox.com",
 }
+
+// defaultDPIApps — "Seçili uygulamalar" kapsamında varsayılan exe'ler.
+var defaultDPIApps = []string{"Discord.exe", "RobloxPlayerBeta.exe"}
 
 // ── DPI Modları ───────────────────────────────────────────────────────────────
 
@@ -123,10 +130,12 @@ func defaultConfig() Config {
 		ChunkSize:      40,
 		ISP:            "auto",
 		DNSMode:        "unchanged",
-		DPISource:      "auto",
+		DPISource:      "internal",
+		DPIScope:       "proxy",
+		DPIApps:        append([]string(nil), defaultDPIApps...),
 		SetSystemProxy: false,
 		BypassEnabled:  false,
-		BypassDomains:  defaultBypassDomains,
+		BypassDomains:  append([]string(nil), defaultBypassDomains...),
 	}
 }
 
@@ -148,11 +157,17 @@ func loadConfig() {
 	if c.DPIMode == "" { c.DPIMode = "balanced" }
 	if c.ChunkSize == 0 { c.ChunkSize = 40 }
 	if c.ISP == "" { c.ISP = "auto" }
-	if c.DPISource == "" { c.DPISource = "auto" }
+	if c.DPISource == "" || c.DPISource == "auto" { c.DPISource = "internal" } // eski "auto" → dahili motor
 	// Mevcut config'de bypass_domains yoksa varsayılanları yükle (liste boşsa
 	// kullanıcı sonradan "Bypass" anahtarını açtığında dolu gelsin diye).
+	if c.DPIScope == "" {
+		c.DPIScope = "proxy"
+	}
+	if c.DPIApps == nil {
+		c.DPIApps = append([]string(nil), defaultDPIApps...)
+	}
 	if c.BypassDomains == nil {
-		c.BypassDomains = defaultBypassDomains
+		c.BypassDomains = append([]string(nil), defaultBypassDomains...)
 	}
 	cfgMu.Lock()
 	current = c
@@ -168,6 +183,15 @@ func getConfig() Config {
 func setConfig(c Config) error {
 	cfgMu.Lock()
 	current = c
+	cfgMu.Unlock()
+	return saveConfig()
+}
+
+// updateConfig — config'i kilit altında tek seferde okuyup değiştirir ve kaydeder
+// (eşzamanlı güncellemeler birbirinin değişikliğini ezmesin).
+func updateConfig(f func(*Config)) error {
+	cfgMu.Lock()
+	f(&current)
 	cfgMu.Unlock()
 	return saveConfig()
 }

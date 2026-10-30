@@ -58,7 +58,7 @@ func parseProcessFound(output string) bool {
 }
 
 // ResolveDPI — config'e göre DPI kaynağını belirler.
-// "auto" modunda öncelik sırası: servis → proses → manuel → bundle → yok.
+// Varsayılan dahili motordur; "gdpi_auto" modunda öncelik: servis → proses → manuel → bundle → yok.
 // Servis veya mevcut proses bulunursa ExePath="" döner (dokunma).
 func ResolveDPI(c Config) (DPILaunchResult, error) {
 	switch c.DPISource {
@@ -77,7 +77,7 @@ func ResolveDPI(c Config) (DPILaunchResult, error) {
 		}
 		return DPILaunchResult{Source: "manual", ExePath: c.GDPIPath}, nil
 
-	default: // "auto" veya boş
+	case "gdpi_auto":
 		if IsGDPIServiceRunning() {
 			return DPILaunchResult{Source: "service"}, nil
 		}
@@ -99,6 +99,9 @@ func ResolveDPI(c Config) (DPILaunchResult, error) {
 			return DPILaunchResult{Source: "bundle", ExePath: cached}, nil
 		}
 		return DPILaunchResult{Source: "none"}, nil
+
+	default: // "internal", eski "auto" veya boş → dahili motor
+		return DPILaunchResult{Source: "internal"}, nil
 	}
 }
 

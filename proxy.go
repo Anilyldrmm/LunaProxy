@@ -202,6 +202,21 @@ func handleConnect(w http.ResponseWriter, r *http.Request) {
 	defer stats.decConn()
 	defer decDeviceConn(ip)
 
+	if strings.HasSuffix(r.Host, ":443") && dpiEngineOn() {
+		hj, ok := w.(http.Hijacker)
+		if !ok {
+			http.Error(w, "hijack desteklenmiyor", http.StatusInternalServerError)
+			return
+		}
+		src, rw, err := hj.Hijack()
+		if err != nil {
+			return
+		}
+		src.Write([]byte("HTTP/1.1 200 Connection Established\r\n\r\n"))
+		handleConnectDPI(src, rw.Reader, r.Host, ip)
+		return
+	}
+
 	dst, err := net.DialTimeout("tcp", r.Host, 15*time.Second)
 	if err != nil {
 		http.Error(w, "bağlantı kurulamadı", http.StatusBadGateway)
@@ -229,13 +244,17 @@ func handleConnect(w http.ResponseWriter, r *http.Request) {
 	}
 
 	src.Write([]byte("HTTP/1.1 200 Connection Established\r\n\r\n"))
+	pipeConns(src, rw, dst, ip)
+}
 
+// pipeConns — iki yönlü kopyalar; srcR, hijack tamponunu da okuyan istemci okuyucusudur.
+func pipeConns(src net.Conn, srcR io.Reader, dst net.Conn, ip string) {
 	var wg sync.WaitGroup
 	wg.Add(2)
 	go func() {
 		defer wg.Done()
 		buf := bufPool.Get().(*[]byte)
-		n, _ := io.CopyBuffer(dst, rw, *buf)
+		n, _ := io.CopyBuffer(dst, srcR, *buf)
 		bufPool.Put(buf)
 		stats.addBytes(n)
 		trackDevice(ip, n)

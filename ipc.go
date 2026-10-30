@@ -56,14 +56,26 @@ func handleIPCMessage(data string) {
 		}()
 
 	case "saveSettings":
+		// UI kısmi payload gönderir; mevcut config üzerine yaz ki gönderilmeyen alanlar (gdpi_path vb.) silinmesin.
+		// Kilit altında yapılır: aynı anda otomatik eklenen engelli alan adı ezilmesin.
 		var cfg Config
-		if err := json.Unmarshal(msg.Payload, &cfg); err != nil {
-			logWarn("saveSettings parse: " + err.Error())
+		var parseErr error
+		prevProxyPort, prevPACPort := 0, 0
+		updateConfig(func(c *Config) {
+			prevProxyPort, prevPACPort = c.ProxyPort, c.PACPort
+			cp := *c
+			// Unmarshal mevcut slice dizilerine yazar; paylaşılan diziler değişmesin
+			cp.BypassDomains = append([]string(nil), c.BypassDomains...)
+			cp.DPIApps = append([]string(nil), c.DPIApps...)
+			if parseErr = json.Unmarshal(msg.Payload, &cp); parseErr == nil {
+				*c = cp
+			}
+			cfg = *c
+		})
+		if parseErr != nil {
+			logWarn("saveSettings parse: " + parseErr.Error())
 			return
 		}
-		prevProxyPort := getConfig().ProxyPort
-		prevPACPort := getConfig().PACPort
-		setConfig(cfg)
 		setStartup(cfg.AutoStart)
 		evalJS(`showSaveSuccess()`)
 		portsChanged := cfg.ProxyPort != prevProxyPort || cfg.PACPort != prevPACPort

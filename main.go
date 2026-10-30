@@ -33,7 +33,11 @@ type app struct {
 	dpiSource  string // aktif DPI kaynağı: "service"|"process"|"manual"|"bundle"|"disabled"|"none"|""
 	stopCancel context.CancelFunc // stop goroutine'ini iptal eder (hızlı yeniden başlatma için)
 	stopDone   chan struct{}       // stop goroutine'i Shutdown'ı tamamladığında kapanır
+	gen        uint64              // her start'ta artar; eski DPI başlatma goroutine'i kendini iptal eder
 }
+
+// current — gen hâlâ aktif çalışmaya mı ait? a.mu tutulurken çağrılır.
+func (a *app) current(gen uint64) bool { return a.running && a.gen == gen }
 
 var g *app
 
@@ -151,19 +155,41 @@ func (a *app) start() error {
 		go SetSystemProxy(fmt.Sprintf("%s:%d", a.localIP, c.ProxyPort))
 	}
 
+	a.gen++
+	gen := a.gen
 	go func() {
 		result, err := ResolveDPI(c)
+		a.mu.Lock()
+		if !a.current(gen) { // bu arada stop/restart oldu
+			a.mu.Unlock()
+			return
+		}
 		if err != nil {
 			logWarn("DPI kaynağı belirlenemedi: " + err.Error())
-			a.mu.Lock()
 			a.dpiSource = "none"
 			a.mu.Unlock()
 			return
 		}
-		a.mu.Lock()
 		a.dpiSource = result.Source
 		a.mu.Unlock()
-		if result.ExePath != "" {
+		if result.Source == "internal" {
+			logInfo("DPI: dahili motor aktif (kapsam: " + c.DPIScope + "), strateji test ediliyor…")
+			if c.DPIScope != "pc" {
+				selectStrategy()
+			}
+			if c.DPIScope == "pc" || c.DPIScope == "apps" {
+				if IsGDPIServiceRunning() || FindGDPIProcess() {
+					logWarn("DPI: PC'de GoodbyeDPI çalışıyor — dahili motorla aynı anda paket işleyebilir, sorun olursa GoodbyeDPI'ı durdurun")
+				}
+				a.mu.Lock() // stop() de a.mu altında stopDivert çağırır → başlatma ile durdurma yarışmaz
+				if a.current(gen) {
+					if err := startDivert(c.DPIScope, c.DPIApps); err != nil {
+						logError("DPI: WinDivert başlatılamadı, sadece proxy girişi çalışıyor: " + err.Error())
+					}
+				}
+				a.mu.Unlock()
+			}
+		} else if result.ExePath != "" {
 			if err := gdpi.Start(result.ExePath, activeGDPIFlags()); err != nil {
 				logError("GoodbyeDPI başlatılamadı: " + err.Error())
 			}
@@ -211,6 +237,7 @@ func (a *app) stop() {
 	if gdpi.IsRunning() {
 		gdpi.Stop()
 	}
+	stopDivert()
 	a.dpiSource = ""
 
 	// Önceki stop goroutine'i varsa iptal et (aynı proxy iki kez kapatılmasın)
@@ -289,6 +316,7 @@ func (a *app) restart() {
 	if gdpi.IsRunning() {
 		gdpi.Stop()
 	}
+	stopDivert()
 	a.dpiSource = ""
 	a.mu.Unlock()
 

@@ -69,6 +69,14 @@ func buildStatus() StatusPayload {
 	case "bundle":
 		dpiSourceLabel = "Bundle (dahili)"
 		gdpiRunning = gdpi.IsRunning()
+	case "internal":
+		dpiSourceLabel = "Dahili Motor (" + currentStrategy() + ")"
+		if divertCoversPC() {
+			dpiSourceLabel = "Dahili Motor — Tüm PC (" + currentDivertStrategy() + ")"
+		} else if c.DPIScope == "apps" && divertActive() {
+			dpiSourceLabel = "Dahili Motor — Uygulamalar (" + currentDivertStrategy() + ")"
+		}
+		gdpiRunning = true
 	case "disabled":
 		dpiSourceLabel = "Devre Dışı"
 		gdpiRunning = false

@@ -741,11 +741,31 @@ window.addEventListener('DOMContentLoaded', function() {
       <!-- SETTINGS -->
       <div class="panel" id="panel-settings">
         <div class="card">
-          <div class="card-title">DPI Bypass Modu</div>
+          <div class="card-title">DPI Motoru</div>
+          <select class="s-select" id="sel-dpi-source" onchange="onDPISourceChange(this.value)">
+            <option value="internal">Dahili Motor (önerilen) — sadece engelli sitelere uygulanır</option>
+            <option value="gdpi_auto">GoodbyeDPI — PC'deki veya gömülü</option>
+            <option value="disabled">Kapalı — sadece proxy</option>
+          </select>
+          <div id="dpi-scope-box">
+            <div class="s-label">Kapsam</div>
+            <select class="s-select" id="sel-dpi-scope" onchange="onDPIScopeChange(this.value)">
+              <option value="proxy">Sadece proxy — telefonlar ve proxy kullanan tarayıcılar</option>
+              <option value="pc">Tüm PC — bu bilgisayardaki tüm uygulamalar</option>
+              <option value="apps">Seçili uygulamalar — Discord, oyunlar…</option>
+            </select>
+            <div id="dpi-apps-box">
+              <div class="s-label">Uygulamalar (her satıra bir .exe adı)</div>
+              <textarea class="s-input" id="inp-dpi-apps" rows="3" spellcheck="false" placeholder="Discord.exe"></textarea>
+            </div>
+          </div>
+        </div>
+        <div class="card" id="card-gdpi-mode">
+          <div class="card-title">GoodbyeDPI Modu</div>
           <div class="radio-group">
             <div class="radio-item" data-val="turbo" onclick="selR(this,'dpi')"><div class="rdot"></div><div><div class="rtxt">Turbo</div><div class="rsub">Hız öncelikli, temel bypass</div></div></div>
             <div class="radio-item sel" data-val="balanced" onclick="selR(this,'dpi')"><div class="rdot"></div><div><div class="rtxt">Dengeli</div><div class="rsub">TLS chunking, standart koruma</div></div></div>
-            <div class="radio-item" data-val="strong" onclick="selR(this,'dpi')"><div class="rdot"></div><div><div class="rtxt">Güçlü</div><div class="rsub">Paket parçalama + TTL desync</div></div></div>
+            <div class="radio-item" data-val="powerful" onclick="selR(this,'dpi')"><div class="rdot"></div><div><div class="rtxt">Güçlü</div><div class="rsub">Paket parçalama + TTL desync</div></div></div>
             <div class="radio-item" data-val="custom" onclick="selR(this,'dpi')"><div class="rdot"></div><div><div class="rtxt">Özel</div><div class="rsub">Manuel GoodbyeDPI bayrakları</div></div></div>
           </div>
         </div>
@@ -1147,6 +1167,9 @@ function saveSettings() {
   var bypassDomains = bypassRaw.split('\n').map(function(s){return s.trim();}).filter(Boolean);
   var cfg = {
     dpi_mode: (document.querySelector('.radio-item.sel[data-val]') || {dataset:{val:'balanced'}}).dataset.val || 'balanced',
+    dpi_source: (document.getElementById('sel-dpi-source') || {value:'internal'}).value || 'internal',
+    dpi_scope: (document.getElementById('sel-dpi-scope') || {value:'proxy'}).value || 'proxy',
+    dpi_apps: ((document.getElementById('inp-dpi-apps') || {value:''}).value || '').split('\n').map(function(s){return s.trim();}).filter(Boolean),
     isp: (document.getElementById('sel-isp') || {value:'auto'}).value || 'auto',
     dns_mode: (document.getElementById('sel-dns') || {value:'unchanged'}).value || 'unchanged',
     bypass_enabled: !!(document.getElementById('sw-bypass-enabled') || {}).checked,
@@ -1159,6 +1182,30 @@ function saveSettings() {
     tailscale_enabled: !!(document.getElementById('sw-tailscale') || {}).checked,
   };
   window.goMessage(JSON.stringify({type:'saveSettings', payload: cfg}));
+}
+
+// appendBypassDomain — motor otomatik tespit ettiği engelli alan adını listeye ekleyince çağrılır,
+// böylece sonraki "Kaydet" eski textarea içeriğiyle onu silmez.
+function appendBypassDomain(host) {
+  var ta = document.getElementById('inp-bypass');
+  if (!ta) return;
+  var list = ta.value.split('\n').map(function(s){return s.trim();}).filter(Boolean);
+  if (list.indexOf(host) >= 0) return;
+  list.push(host);
+  ta.value = list.join('\n');
+  updateBypassCount();
+}
+
+function onDPISourceChange(v) {
+  var card = document.getElementById('card-gdpi-mode');
+  if (card) card.style.display = v === 'gdpi_auto' ? '' : 'none';
+  var scope = document.getElementById('dpi-scope-box');
+  if (scope) scope.style.display = v === 'internal' ? '' : 'none';
+}
+
+function onDPIScopeChange(v) {
+  var box = document.getElementById('dpi-apps-box');
+  if (box) box.style.display = v === 'apps' ? '' : 'none';
 }
 
 function onTailscaleToggle(enabled) {
@@ -1647,6 +1694,17 @@ function loadSettings(cfg) {
   document.querySelectorAll('.radio-item[data-val]').forEach(function(el) {
     el.classList.toggle('sel', el.dataset.val === (cfg.dpi_mode||cfg.DPIMode));
   });
+  var dpiSrc = cfg.dpi_source||cfg.DPISource||'internal';
+  if (['internal','gdpi_auto','disabled'].indexOf(dpiSrc) < 0) dpiSrc = 'gdpi_auto'; // service/manual → GoodbyeDPI
+  var selDpi = document.getElementById('sel-dpi-source');
+  if (selDpi) selDpi.value = dpiSrc;
+  onDPISourceChange(dpiSrc);
+  var dpiScope = cfg.dpi_scope||cfg.DPIScope||'proxy';
+  var selScope = document.getElementById('sel-dpi-scope');
+  if (selScope) selScope.value = dpiScope;
+  onDPIScopeChange(dpiScope);
+  var appsTa = document.getElementById('inp-dpi-apps');
+  if (appsTa) appsTa.value = (cfg.dpi_apps||cfg.DPIApps||[]).join('\n');
   var autoStart = document.getElementById('sw-autostart');
   if (autoStart) autoStart.checked = !!(cfg.auto_start||cfg.AutoStart);
   var proxyAutoStart = document.getElementById('sw-proxy-autostart');
