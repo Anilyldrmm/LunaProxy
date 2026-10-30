@@ -11,11 +11,11 @@
     </dependentAssembly>
   </dependency>
 
-  <!-- UAC: Admin yetki iste (firewall kuralları için gerekli) -->
+  <!-- UAC: yöneticide yükseltilmiş çalış (WinDivert, firewall); standart kullanıcıda proxy yine çalışır -->
   <trustInfo xmlns="urn:schemas-microsoft-com:asm.v2">
     <security>
       <requestedPrivileges>
-        <requestedExecutionLevel level="requireAdministrator" uiAccess="false"/>
+        <requestedExecutionLevel level="highestAvailable" uiAccess="false"/>
       </requestedPrivileges>
     </security>
   </trustInfo>

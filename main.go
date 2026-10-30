@@ -1,14 +1,17 @@
-﻿package main
+package main
 
 import (
 	"context"
 	"fmt"
 	"net/http"
 	"os"
+	"path/filepath"
 	"strings"
 	"sync"
 	"time"
+	"unsafe"
 
+	"golang.org/x/sys/windows"
 	"golang.org/x/sys/windows/registry"
 )
 
@@ -29,11 +32,11 @@ type app struct {
 	localIP    string
 	proxySrv   *http.Server
 	pacSrv     *http.Server
-	pacPort    int    // aktif PAC port'u takip — port değişirse sunucu yeniden başlar
-	dpiSource  string // aktif DPI kaynağı: "service"|"process"|"manual"|"bundle"|"disabled"|"none"|""
+	pacPort    int                // aktif PAC port'u takip — port değişirse sunucu yeniden başlar
+	dpiSource  string             // aktif DPI kaynağı: "service"|"process"|"manual"|"bundle"|"disabled"|"none"|""
 	stopCancel context.CancelFunc // stop goroutine'ini iptal eder (hızlı yeniden başlatma için)
-	stopDone   chan struct{}       // stop goroutine'i Shutdown'ı tamamladığında kapanır
-	gen        uint64              // her start'ta artar; eski DPI başlatma goroutine'i kendini iptal eder
+	stopDone   chan struct{}      // stop goroutine'i Shutdown'ı tamamladığında kapanır
+	gen        uint64             // her start'ta artar; eski DPI başlatma goroutine'i kendini iptal eder
 }
 
 // current — gen hâlâ aktif çalışmaya mı ait? a.mu tutulurken çağrılır.
@@ -45,6 +48,9 @@ var g *app
 var appExiting bool
 
 func main() {
+	if relaunchElevated() {
+		return
+	}
 	if !ensureSingleInstance() {
 		bringExistingToFront()
 		return
@@ -53,6 +59,10 @@ func main() {
 	SentinelCheck()
 	loadConfig()
 	g = &app{localIP: getLocalIP()}
+	// Eski sürümlerin Run anahtarı kaydı yükseltilmiş uygulamayı açılışta başlatmıyor: zamanlanmış göreve taşı.
+	if windows.GetCurrentProcessToken().IsElevated() && runKeyHasApp() {
+		go setStartup(true)
+	}
 
 	// PAC sunucusunu proxy'den bağımsız, hemen başlat.
 	// Başlangıçta DIRECT döndürür; proxy açılınca otomatik güncellenir.
@@ -185,6 +195,7 @@ func (a *app) start() error {
 				if a.current(gen) {
 					if err := startDivert(c.DPIScope, c.DPIApps); err != nil {
 						logError("DPI: WinDivert başlatılamadı, sadece proxy girişi çalışıyor: " + err.Error())
+						evalJS(fmt.Sprintf(`showError(%s)`, jsonEscape(err.Error())))
 					}
 				}
 				a.mu.Unlock()
@@ -334,7 +345,45 @@ func (a *app) restart() {
 
 // ── Windows kayıt defteri — otomatik başlangıç ────────────────────────────────
 
+// Yükseltilmiş (yönetici) çalışan uygulamaları Windows, Run anahtarından açılışta başlatmaz.
+// Bu yüzden başlangıç kaydı "en yüksek yetkiyle" zamanlanmış görevdir; görev oluşturulamazsa
+// (yükseltilmemiş çalışıyorsa) Run anahtarına düşülür.
 func startupEnabled() bool {
+	if _, err := hiddenOutput("schtasks", "/Query", "/TN", appName); err == nil {
+		return true
+	}
+	return runKeyHasApp()
+}
+
+// underDir — path, dir'in altında mı (büyük/küçük harf duyarsız; "C:\Program FilesX" eşleşmez).
+func underDir(path, dir string) bool {
+	if dir == "" {
+		return false
+	}
+	return strings.HasPrefix(strings.ToLower(filepath.Clean(path)), strings.ToLower(filepath.Clean(dir))+`\`)
+}
+
+// relaunchElevated — yönetici hesabı yetkisiz (filtrelenmiş token) başlatıldıysa kendini UAC ile
+// yükseltilmiş yeniden açar; WinDivert ve firewall kuralları yönetici ister. Standart kullanıcıda
+// (yükseltecek yetki yok) veya UAC reddedilirse false döner ve uygulama yetkisiz devam eder.
+func relaunchElevated() bool {
+	const tokenElevationTypeLimited = 3
+	t := windows.GetCurrentProcessToken()
+	var typ, n uint32
+	if windows.GetTokenInformation(t, windows.TokenElevationType, (*byte)(unsafe.Pointer(&typ)), 4, &n) != nil ||
+		typ != tokenElevationTypeLimited {
+		return false
+	}
+	exe, err := os.Executable()
+	if err != nil {
+		return false
+	}
+	verb, _ := windows.UTF16PtrFromString("runas")
+	file, _ := windows.UTF16PtrFromString(exe)
+	return windows.ShellExecute(0, verb, file, nil, nil, windows.SW_SHOWNORMAL) == nil
+}
+
+func runKeyHasApp() bool {
 	k, err := openRunKey(false)
 	if err != nil {
 		return false
@@ -345,17 +394,39 @@ func startupEnabled() bool {
 }
 
 func setStartup(on bool) {
-	k, err := openRunKey(true)
-	if err != nil {
+	if k, err := openRunKey(true); err == nil {
+		k.DeleteValue(appName) // eski kayıt: yükseltilmiş uygulamayı zaten başlatmıyordu
+		k.Close()
+	}
+	hiddenOutput("schtasks", "/Delete", "/TN", appName, "/F")
+	if !on {
+		logInfo("Windows başlangıcından kaldırıldı")
 		return
 	}
-	defer k.Close()
-	if on {
-		exe, _ := os.Executable()
-		k.SetStringValue(appName, exe)
-		logInfo("Windows başlangıcına eklendi")
-	} else {
-		k.DeleteValue(appName)
-		logInfo("Windows başlangıcından kaldırıldı")
+	exe, _ := os.Executable()
+	// Yükseltilmiş görev yalnızca standart kullanıcının yazamadığı Program Files'taki exe için:
+	// aksi halde exe'yi değiştiren herhangi bir süreç açılışta sessizce yönetici olur.
+	pf, _ := windows.KnownFolderPath(windows.FOLDERID_ProgramFiles, 0)
+	if !underDir(exe, pf) {
+		if k, err := openRunKey(true); err == nil {
+			k.SetStringValue(appName, exe)
+			k.Close()
+		}
+		logInfo("Windows başlangıcına eklendi (Program Files dışı: yetkisiz başlar)")
+		return
 	}
+	// Varsayılan görev ayarları 72 saatte süreci öldürür ve pilde başlatmaz; ikisi de kapatılır.
+	ps := fmt.Sprintf(`Register-ScheduledTask -TaskName '%s' -Force -RunLevel Highest -User "$env:USERDOMAIN\$env:USERNAME" `+
+		`-Action (New-ScheduledTaskAction -Execute '%s') `+
+		`-Trigger (New-ScheduledTaskTrigger -AtLogOn -User "$env:USERDOMAIN\$env:USERNAME") `+
+		`-Settings (New-ScheduledTaskSettingsSet -ExecutionTimeLimit 0 -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries) | Out-Null`,
+		appName, strings.ReplaceAll(exe, "'", "''"))
+	if out, err := hiddenOutput("powershell", "-NoProfile", "-NonInteractive", "-Command", ps); err != nil {
+		logWarn("Başlangıç görevi oluşturulamadı, Run anahtarı kullanılıyor: " + strings.TrimSpace(out) + " " + err.Error())
+		if k, err := openRunKey(true); err == nil {
+			k.SetStringValue(appName, exe)
+			k.Close()
+		}
+	}
+	logInfo("Windows başlangıcına eklendi")
 }

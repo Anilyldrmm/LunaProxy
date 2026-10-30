@@ -61,6 +61,7 @@ Filename: "{app}\{#AppExe}"; Flags: nowait runascurrentuser; Check: WizardSilent
 
 [UninstallRun]
 Filename: "taskkill"; Parameters: "/f /im {#AppExe}"; Flags: runhidden; RunOnceId: "KillApp"
+Filename: "schtasks"; Parameters: "/Delete /TN LunaProxy /F"; Flags: runhidden; RunOnceId: "DelStartupTask"
 
 [Code]
 // WebView2 Runtime kurulu mu kontrol et

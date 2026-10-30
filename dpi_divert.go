@@ -59,6 +59,9 @@ func divertCoversPC() bool {
 // startDivert — scope "pc" veya "apps" için WinDivert döngülerini başlatır.
 func startDivert(scope string, apps []string) error {
 	stopDivert() // önceki handle'lar sızmasın
+	if !windows.GetCurrentProcessToken().IsElevated() {
+		return fmt.Errorf("Tüm PC / Seçili uygulamalar kapsamı yönetici yetkisi ister — uygulamayı yönetici olarak açın")
+	}
 	if err := loadWinDivert(); err != nil {
 		return err
 	}
