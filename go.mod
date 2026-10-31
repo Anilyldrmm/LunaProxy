@@ -15,3 +15,5 @@ require (
 	golang.org/x/crypto v0.51.0 // indirect
 	golang.org/x/image v0.40.0 // indirect
 )
+
+replace fyne.io/systray => ./third_party/systray

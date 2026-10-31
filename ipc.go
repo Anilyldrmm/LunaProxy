@@ -164,9 +164,9 @@ func handleIPCMessage(data string) {
 		}
 		json.Unmarshal(msg.Payload, &p) //nolint:errcheck
 		if p.Theme == "neutral" || p.Theme == "purple" {
-			c := getConfig()
-			c.Theme = p.Theme
-			setConfig(c) //nolint:errcheck
+			if err := updateConfig(func(c *Config) { c.Theme = p.Theme }); err != nil {
+				logWarn("tema kaydedilemedi: " + err.Error())
+			}
 		}
 
 	case "ispChanged":

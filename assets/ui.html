@@ -1180,6 +1180,7 @@ function saveSettings() {
     proxy_port: parseInt((document.getElementById('inp-proxy-port') || {value:'8888'}).value) || 8888,
     pac_port: parseInt((document.getElementById('inp-pac-port') || {value:'8080'}).value) || 8080,
     tailscale_enabled: !!(document.getElementById('sw-tailscale') || {}).checked,
+    theme: _currentTheme,
   };
   window.goMessage(JSON.stringify({type:'saveSettings', payload: cfg}));
 }
