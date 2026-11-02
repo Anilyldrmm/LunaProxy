@@ -118,6 +118,11 @@ func (a *app) start() error {
 
 	c := getConfig()
 
+	// Açılışta ağ hazır değilse localIP 127.0.0.1 kalır; PAC telefona loopback verir.
+	if ip := getLocalIP(); ip != a.localIP && !strings.HasPrefix(ip, "127.") {
+		a.localIP = ip
+	}
+
 	// HTTP proxy
 	ps, err := startProxy(c.ProxyPort)
 	if err != nil {
